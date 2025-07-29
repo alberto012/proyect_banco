@@ -11,7 +11,6 @@ from datetime import datetime
 from pathlib import Path
 import traceback
 import asyncio
-import httpx
 from concurrent.futures import ThreadPoolExecutor
 import os
 import nest_asyncio
@@ -450,26 +449,6 @@ def clear_and_regenerate_database():
     except Exception as e:
         st.error(f"Error al limpiar la base de datos: {e}")
         return False
-
-# --- Búsqueda web simple usando DuckDuckGo Instant Answer API ---
-async def web_search_duckduckgo(query: str) -> str:
-    print(f"[DuckDuckGo] Buscando: {query}")
-    url = f"https://api.duckduckgo.com/?q={query}&format=json&no_redirect=1&no_html=1"
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url)
-        print(f"[DuckDuckGo] Status: {resp.status_code}")
-        if resp.status_code == 200:
-            data = resp.json()
-            print(f"[DuckDuckGo] Data: {data}")
-            abstract = data.get("AbstractText")
-            if abstract:
-                print(f"[DuckDuckGo] Abstract: {abstract}")
-                return abstract
-            related = data.get("RelatedTopics")
-            if related and len(related) > 0:
-                print(f"[DuckDuckGo] Related: {related[0].get('Text', '')}")
-                return related[0].get("Text", "")
-        return ""
 
 def main():
     setup_page_config()

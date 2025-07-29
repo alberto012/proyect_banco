@@ -5,5 +5,4 @@ pypdf
 docx2txt
 ollama
 sentence-transformers
-httpx
 nest_asyncio
