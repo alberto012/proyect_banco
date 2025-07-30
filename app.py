@@ -20,6 +20,8 @@ import unicodedata
 from langchain.schema import BaseRetriever
 from typing import List, Any
 from pydantic import Field
+import hashlib
+import difflib
 
 DOCUMENTS_DIR = Path("./documents")
 CHROMA_DB_DIR = Path("./chroma_db")
@@ -425,6 +427,13 @@ def set_view_comments_mode():
     st.session_state["show_post_save_return_option"] = False
     st.session_state["show_chat_interface"] = False
 
+def set_upload_file_mode():
+    st.session_state["show_upload_file_area"] = True
+    st.session_state["show_comment_input_area"] = False
+    st.session_state["show_saved_comments_section"] = False
+    st.session_state["show_post_save_return_option"] = False
+    st.session_state["show_chat_interface"] = False
+
 def clear_chat_history():
     st.session_state["messages"] = []
     set_chat_mode()
@@ -450,6 +459,210 @@ def clear_and_regenerate_database():
         st.error(f"Error al limpiar la base de datos: {e}")
         return False
 
+def get_document_hash(content: str) -> str:
+    """Calcula el hash MD5 del contenido del documento"""
+    return hashlib.md5(content.encode('utf-8')).hexdigest()
+
+def compare_documents(new_content: str, existing_content: str) -> dict:
+    """Compara dos documentos y retorna las diferencias"""
+    new_lines = new_content.split('\n')
+    existing_lines = existing_content.split('\n')
+    
+    # Usar difflib para encontrar diferencias
+    differ = difflib.Differ()
+    diff = list(differ.compare(existing_lines, new_lines))
+    
+    # Analizar diferencias
+    additions = []
+    deletions = []
+    changes = []
+    
+    for line in diff:
+        if line.startswith('+ '):
+            additions.append(line[2:])
+        elif line.startswith('- '):
+            deletions.append(line[2:])
+        elif line.startswith('? '):
+            changes.append(line[2:])
+    
+    return {
+        'additions': additions,
+        'deletions': deletions,
+        'changes': changes,
+        'has_changes': len(additions) > 0 or len(deletions) > 0,
+        'total_additions': len(additions),
+        'total_deletions': len(deletions)
+    }
+
+def find_similar_documents(filename: str, vectorstore) -> List[dict]:
+    """Busca documentos similares basándose en el nombre del archivo"""
+    if not vectorstore:
+        return []
+    
+    try:
+        # Buscar por nombre de archivo
+        filename_base = Path(filename).stem.lower()
+        similar_docs = enhanced_search(vectorstore, filename_base, k=5)
+        
+        results = []
+        for doc in similar_docs:
+            source = doc.metadata.get('source', '')
+            if source and source != "Comentario del usuario":
+                source_filename = Path(source).name
+                source_base = Path(source_filename).stem.lower()
+                
+                # Calcular similitud de nombres
+                similarity = difflib.SequenceMatcher(None, filename_base, source_base).ratio()
+                
+                if similarity > 0.3:  # Umbral de similitud
+                    results.append({
+                        'filename': source_filename,
+                        'full_path': source,
+                        'content': doc.page_content,
+                        'similarity': similarity,
+                        'metadata': doc.metadata
+                    })
+        
+        return sorted(results, key=lambda x: x['similarity'], reverse=True)
+    except Exception as e:
+        print(f"Error buscando documentos similares: {e}")
+        return []
+
+def generate_comparison_comment(filename: str, comparison_result: dict, similar_docs: List[dict]) -> str:
+    """Genera un comentario automático sobre los cambios detectados"""
+    comment_parts = []
+    
+    # Información básica
+    comment_parts.append(f"📄 **Análisis automático del archivo: {filename}**")
+    comment_parts.append(f"📅 Fecha de análisis: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Resumen de cambios
+    if comparison_result['has_changes']:
+        comment_parts.append(f"\n🔄 **Cambios detectados:**")
+        comment_parts.append(f"• Líneas agregadas: {comparison_result['total_additions']}")
+        comment_parts.append(f"• Líneas eliminadas: {comparison_result['total_deletions']}")
+        
+        # Detalles de cambios
+        if comparison_result['additions']:
+            comment_parts.append(f"\n➕ **Contenido nuevo:**")
+            for i, addition in enumerate(comparison_result['additions'][:5]):  # Mostrar solo las primeras 5
+                comment_parts.append(f"  - {addition[:100]}{'...' if len(addition) > 100 else ''}")
+            if len(comparison_result['additions']) > 5:
+                comment_parts.append(f"  ... y {len(comparison_result['additions']) - 5} líneas más")
+        
+        if comparison_result['deletions']:
+            comment_parts.append(f"\n➖ **Contenido eliminado:**")
+            for i, deletion in enumerate(comparison_result['deletions'][:5]):  # Mostrar solo las primeras 5
+                comment_parts.append(f"  - {deletion[:100]}{'...' if len(deletion) > 100 else ''}")
+            if len(comparison_result['deletions']) > 5:
+                comment_parts.append(f"  ... y {len(comparison_result['deletions']) - 5} líneas más")
+    else:
+        comment_parts.append(f"\n✅ **No se detectaron cambios significativos**")
+    
+    # Documentos similares encontrados
+    if similar_docs:
+        comment_parts.append(f"\n📚 **Documentos similares encontrados:**")
+        for i, doc in enumerate(similar_docs[:3]):  # Mostrar solo los 3 más similares
+            similarity_percent = int(doc['similarity'] * 100)
+            comment_parts.append(f"• {doc['filename']} (similitud: {similarity_percent}%)")
+    
+    return "\n".join(comment_parts)
+
+def process_uploaded_file(uploaded_file, vectorstore) -> dict:
+    """Procesa un archivo subido y lo compara con documentos existentes"""
+    try:
+        # Leer el contenido del archivo subido
+        if uploaded_file.type == "application/pdf":
+            # Para PDFs, necesitamos guardarlo temporalmente
+            temp_path = DOCUMENTS_DIR / f"temp_{uploaded_file.name}"
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            loader = PyPDFLoader(str(temp_path))
+            new_docs = loader.load()
+            
+            # Limpiar archivo temporal
+            temp_path.unlink()
+        elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            # Para DOCX, también guardar temporalmente
+            temp_path = DOCUMENTS_DIR / f"temp_{uploaded_file.name}"
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            loader = Docx2txtLoader(str(temp_path))
+            new_docs = loader.load()
+            
+            # Limpiar archivo temporal
+            temp_path.unlink()
+        else:
+            return {"success": False, "error": "Formato de archivo no soportado"}
+        
+        if not new_docs:
+            return {"success": False, "error": "No se pudo leer el contenido del archivo"}
+        
+        # Combinar todo el contenido del nuevo documento
+        new_content = "\n".join([doc.page_content for doc in new_docs])
+        new_hash = get_document_hash(new_content)
+        
+        # Buscar documentos similares
+        similar_docs = find_similar_documents(uploaded_file.name, vectorstore)
+        
+        # Comparar con documentos similares
+        comparison_results = []
+        for similar_doc in similar_docs:
+            comparison = compare_documents(new_content, similar_doc['content'])
+            if comparison['has_changes']:
+                comparison['similar_doc'] = similar_doc
+                comparison_results.append(comparison)
+        
+        # Generar comentario automático si hay cambios
+        auto_comment = None
+        if comparison_results:
+            # Usar el documento más similar para la comparación
+            best_comparison = max(comparison_results, key=lambda x: x['similar_doc']['similarity'])
+            auto_comment = generate_comparison_comment(uploaded_file.name, best_comparison, similar_docs)
+        
+        return {
+            "success": True,
+            "filename": uploaded_file.name,
+            "content": new_content,
+            "hash": new_hash,
+            "similar_docs": similar_docs,
+            "comparison_results": comparison_results,
+            "auto_comment": auto_comment,
+            "has_changes": len(comparison_results) > 0
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+def save_uploaded_file(uploaded_file, vectorstore) -> bool:
+    """Guarda el archivo subido en la carpeta de documentos"""
+    try:
+        # Guardar el archivo
+        file_path = DOCUMENTS_DIR / uploaded_file.name
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        
+        # Procesar y agregar a la base de datos
+        docs_to_add = load_document_async(file_path)
+        if docs_to_add:
+            # Aplicar mejoras a cada documento
+            enhanced_docs = []
+            for doc in docs_to_add:
+                enhanced_doc = enhance_document_content(doc)
+                enhanced_docs.append(enhanced_doc)
+            
+            # Agregar a la base de datos
+            vectorstore.add_documents(enhanced_docs)
+            vectorstore.persist()
+            return True
+        
+        return False
+    except Exception as e:
+        print(f"Error guardando archivo: {e}")
+        return False
+
 def main():
     setup_page_config()
 
@@ -460,7 +673,8 @@ def main():
         "comment_text_value": "",
         "show_saved_comments_section": False,
         "show_post_save_return_option": False,
-        "show_chat_interface": True
+        "show_chat_interface": True,
+        "show_upload_file_area": False
     }
     for k, v in session_defaults.items():
         if k not in st.session_state:
@@ -476,6 +690,7 @@ def main():
     with st.sidebar:
         st.markdown("<div style='font-size:1.2em;font-weight:600;color:var(--primary);margin-bottom:0.5em;'>Navegación</div>", unsafe_allow_html=True)
         st.button("💬 Chat", on_click=set_chat_mode, use_container_width=True)
+        st.button("📁 Subir archivo", on_click=set_upload_file_mode, use_container_width=True)
         st.button("📝 Añadir comentario", on_click=set_add_comment_mode, use_container_width=True)
         st.button("📋 Ver comentarios", on_click=set_view_comments_mode, use_container_width=True)
         st.button("🧹 Limpiar chat", on_click=clear_chat_history, use_container_width=True)
@@ -553,6 +768,85 @@ def main():
 
     elif st.session_state.show_saved_comments_section:
         display_saved_comments(st.session_state.vectorstore)
+
+    elif st.session_state.show_upload_file_area:
+        st.subheader("📁 Subir archivo")
+        st.markdown("Sube un archivo PDF o DOCX para agregarlo a tu base de documentos.")
+        
+        uploaded_file = st.file_uploader(
+            "Selecciona un archivo",
+            type=['pdf', 'docx'],
+            help="Solo se aceptan archivos PDF y DOCX"
+        )
+        
+        if uploaded_file is not None:
+            st.success(f"✅ Archivo seleccionado: **{uploaded_file.name}**")
+            
+            # Mostrar información del archivo
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Tamaño", f"{uploaded_file.size / 1024:.1f} KB")
+            with col2:
+                st.metric("Tipo", uploaded_file.type)
+            with col3:
+                st.metric("Nombre", uploaded_file.name)
+            
+            # Procesar archivo para análisis
+            with st.spinner("Analizando archivo..."):
+                analysis_result = process_uploaded_file(uploaded_file, st.session_state.vectorstore)
+            
+            if analysis_result["success"]:
+                st.success("✅ Análisis completado")
+                
+                # Mostrar documentos similares encontrados
+                if analysis_result["similar_docs"]:
+                    st.markdown("### 📚 Documentos similares encontrados")
+                    for i, doc in enumerate(analysis_result["similar_docs"][:3]):
+                        similarity_percent = int(doc['similarity'] * 100)
+                        with st.expander(f"📄 {doc['filename']} (Similitud: {similarity_percent}%)"):
+                            st.markdown(f"**Ruta:** `{doc['full_path']}`")
+                            st.markdown(f"**Similitud:** {similarity_percent}%")
+                            st.markdown("**Vista previa del contenido:**")
+                            st.text(doc['content'][:300] + "..." if len(doc['content']) > 300 else doc['content'])
+                
+                # Mostrar análisis de cambios si los hay
+                if analysis_result["has_changes"]:
+                    st.warning("🔄 Se detectaron cambios en comparación con documentos existentes")
+                    
+                    # Mostrar comentario automático generado
+                    if analysis_result["auto_comment"]:
+                        st.markdown("### 📝 Comentario automático generado")
+                        st.markdown(analysis_result["auto_comment"])
+                        
+                        # Opción para guardar el comentario automático
+                        if st.button("💾 Guardar comentario automático", type="primary"):
+                            timestamp = add_comment_to_db(analysis_result["auto_comment"], st.session_state.vectorstore)
+                            if timestamp:
+                                st.success("✅ Comentario automático guardado")
+                            else:
+                                st.error("❌ Error al guardar el comentario")
+                else:
+                    st.info("ℹ️ No se detectaron cambios significativos con documentos existentes")
+                
+                # Botones de acción
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("💾 Guardar archivo", type="primary", use_container_width=True):
+                        with st.spinner("Guardando archivo..."):
+                            if save_uploaded_file(uploaded_file, st.session_state.vectorstore):
+                                st.success("✅ Archivo guardado exitosamente")
+                                st.rerun()  # Recargar para mostrar el nuevo documento
+                            else:
+                                st.error("❌ Error al guardar el archivo")
+                
+                with col2:
+                    if st.button("🔄 Cancelar", use_container_width=True):
+                        st.rerun()
+                
+            else:
+                st.error(f"❌ Error en el análisis: {analysis_result['error']}")
+                if st.button("🔄 Intentar de nuevo"):
+                    st.rerun()
 
     # Controlar si el input debe estar deshabilitado
     if "input_disabled" not in st.session_state:
