@@ -1,303 +1,136 @@
-# RAG Local - Sistema de Búsqueda Mejorado
+# RAG Local - Agente de Documentos Inteligente
 
-Un sistema de búsqueda inteligente basado en RAG (Retrieval-Augmented Generation) que permite buscar y consultar documentos de manera eficiente usando procesamiento de lenguaje natural.
+Un agente RAG (Retrieval-Augmented Generation) local que permite consultar documentos PDF y Word de forma offline, con capacidades avanzadas de análisis y comparación de documentos.
 
-## 📋 Tabla de Contenidos
+## 🚀 Características Principales
 
-- [Características](#características)
-- [Requisitos del Sistema](#requisitos-del-sistema)
-- [Instalación](#instalación)
-- [Configuración](#configuración)
-- [Ejecución](#ejecución)
-- [Uso del Sistema](#uso-del-sistema)
-- [Mejoras Implementadas](#mejoras-implementadas)
-- [Solución de Problemas](#solución-de-problemas)
-- [Estructura del Proyecto](#estructura-del-proyecto)
+### 📁 Subida Inteligente de Archivos
+- **Análisis automático**: Compara automáticamente archivos nuevos con documentos existentes
+- **Detección de duplicados**: Identifica archivos idénticos para evitar redundancias
+- **Análisis semántico**: Detecta cambios significativos usando análisis de texto avanzado
+- **Comentarios automáticos**: Genera comentarios detallados sobre los cambios detectados
+- **Validaciones robustas**: Verifica formato, tamaño y contenido de archivos
 
-## ✨ Características
+### 🔍 Búsqueda Mejorada
+- **Búsqueda semántica**: Utiliza embeddings para encontrar información relevante
+- **Búsqueda por texto**: Combina búsqueda semántica con búsqueda de texto normalizado
+- **Variaciones de consulta**: Busca automáticamente variaciones y términos relacionados
+- **Fuentes detalladas**: Muestra exactamente de dónde proviene cada respuesta
 
-- 🔍 **Búsqueda semántica avanzada**: Encuentra documentos usando significado, no solo palabras exactas
-- 📄 **Soporte múltiples formatos**: PDF, DOCX, TXT y más
-- 🧠 **Procesamiento inteligente**: Normalización de texto y variaciones automáticas de palabras
-- 💾 **Base de datos local**: ChromaDB para almacenamiento de embeddings
-- 🌐 **Interfaz web**: Streamlit para una experiencia de usuario intuitiva
-- 🔄 **Búsqueda flexible**: Encuentra documentos con variaciones de palabras y términos relacionados
+### 💬 Sistema de Comentarios
+- **Comentarios automáticos**: Generados automáticamente al subir archivos
+- **Comentarios personalizados**: Permite agregar comentarios manuales
+- **Historial de comentarios**: Visualiza todos los comentarios guardados
+- **Edición de comentarios**: Modifica comentarios automáticos antes de guardarlos
 
-## 💻 Requisitos del Sistema
+### 📊 Análisis de Documentos
+- **Comparación de contenido**: Detecta adiciones, eliminaciones y cambios
+- **Análisis de similitud**: Calcula porcentajes de similitud entre documentos
+- **Palabras clave**: Identifica términos nuevos y removidos
+- **Recomendaciones**: Sugiere acciones basadas en el análisis
 
-### Requisitos Mínimos
-- **Sistema Operativo**: Windows 10/11, macOS 10.14+, o Linux (Ubuntu 18.04+)
-- **Python**: Versión 3.8 o superior
-- **RAM**: Mínimo 4GB (recomendado 8GB+)
-- **Espacio en disco**: 2GB libres
-- **Procesador**: Dual-core o superior
+## 🛠️ Instalación
 
-### Requisitos Recomendados
-- **RAM**: 16GB o más
-- **Procesador**: Quad-core o superior
-- **Espacio en disco**: 5GB libres
-- **GPU**: Opcional, para aceleración de procesamiento
+### Requisitos Previos
+- Python 3.8 o superior
+- Ollama instalado y ejecutándose localmente
+- Modelo de lenguaje compatible con Ollama (recomendado: llama2, mistral, o codellama)
 
-## 🚀 Instalación
+### Pasos de Instalación
 
-### Paso 1: Clonar el Repositorio
+1. **Clonar el repositorio**
+   ```bash
+   git clone <url-del-repositorio>
+   cd mi_agente_rag
+   ```
 
+2. **Crear entorno virtual**
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # En Windows: .venv\Scripts\activate
+   ```
+
+3. **Instalar dependencias**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configurar Ollama**
+   ```bash
+   # Instalar un modelo (ejemplo con llama2)
+   ollama pull llama2
+   ```
+
+5. **Ejecutar la aplicación**
+   ```bash
+   streamlit run app.py
+   ```
+
+## 📖 Uso
+
+### Subir Archivos
+
+1. **Acceder a la función de subida**
+   - Haz clic en "📁 Subir archivo" en la barra lateral
+
+2. **Seleccionar archivo**
+   - Arrastra o selecciona un archivo PDF o DOCX
+   - El sistema validará automáticamente el formato y tamaño
+
+3. **Análisis automático**
+   - El sistema analizará el contenido del archivo
+   - Comparará con documentos existentes
+   - Generará un comentario automático con los hallazgos
+
+4. **Revisar resultados**
+   - **Documentos similares**: Ver documentos existentes relacionados
+   - **Análisis de cambios**: Detalles sobre modificaciones detectadas
+   - **Comentario automático**: Análisis generado automáticamente
+
+5. **Tomar acciones**
+   - **Guardar archivo**: Agregar el documento a la base de datos
+   - **Guardar comentario**: Guardar el comentario automático
+   - **Editar comentario**: Modificar el comentario antes de guardarlo
+   - **Agregar comentario personalizado**: Crear un comentario manual
+
+### Consultar Documentos
+
+1. **Hacer preguntas**
+   - Escribe preguntas en lenguaje natural
+   - El sistema buscará en todos los documentos y comentarios
+
+2. **Revisar fuentes**
+   - Cada respuesta incluye las fuentes utilizadas
+   - Puedes ver el contenido exacto de donde proviene la información
+
+### Gestionar Comentarios
+
+1. **Ver comentarios**
+   - Haz clic en "📋 Ver comentarios" en la barra lateral
+   - Revisa todos los comentarios guardados
+
+2. **Agregar comentarios**
+   - Haz clic en "📝 Añadir comentario"
+   - Escribe comentarios personalizados
+
+## 🔧 Configuración Avanzada
+
+### Variables de Entorno
 ```bash
-# Clonar desde GitHub
-git clone https://github.com/tu-usuario/mi_agente_rag.git
+# Configurar modelo de Ollama (opcional)
+export OLLAMA_MODEL=llama2
 
-# Navegar al directorio del proyecto
-cd mi_agente_rag
+# Configurar directorios (opcional)
+export DOCUMENTS_DIR=./documents
+export CHROMA_DB_DIR=./chroma_db
 ```
 
-### Paso 2: Configurar Entorno Virtual
+### Personalización del Modelo
+Puedes cambiar el modelo de Ollama modificando la función `get_ollama_llm()` en `app.py`:
 
-#### En Windows:
-```bash
-# Crear entorno virtual
-python -m venv .venv
-
-# Activar entorno virtual
-.venv\Scripts\activate
-
-# Verificar que está activado (debería mostrar (.venv) al inicio)
-```
-
-#### En macOS/Linux:
-```bash
-# Crear entorno virtual
-python3 -m venv .venv
-
-# Activar entorno virtual
-source .venv/bin/activate
-
-# Verificar que está activado (debería mostrar (.venv) al inicio)
-```
-
-### Paso 3: Instalar Dependencias
-
-```bash
-# Actualizar pip
-pip install --upgrade pip
-
-# Instalar dependencias del proyecto
-pip install -r requirements.txt
-```
-
-### Paso 4: Verificar Instalación
-
-```bash
-# Verificar que Python está disponible
-python --version
-
-# Verificar que las dependencias se instalaron correctamente
-pip list
-```
-
-## ⚙️ Configuración
-
-### Paso 1: Preparar Documentos
-
-1. Coloca tus documentos en la carpeta `documents/`
-2. Formatos soportados:
-   - PDF (.pdf)
-   - Word (.docx, .doc)
-   - Texto (.txt)
-   - Markdown (.md)
-
-### Paso 2: Configurar Variables de Entorno (Opcional)
-
-Crea un archivo `.env` en la raíz del proyecto:
-
-```env
-# Configuraciones opcionales
-OPENAI_API_KEY=tu_api_key_si_usas_openai
-MODEL_NAME=llama2  # o gpt-3.5-turbo si usas OpenAI
-```
-
-## 🏃‍♂️ Ejecución
-
-### Método 1: Ejecución Directa
-
-```bash
-# Asegúrate de que el entorno virtual esté activado
-# En Windows:
-.venv\Scripts\activate
-
-# En macOS/Linux:
-source .venv/bin/activate
-
-# Ejecutar la aplicación
-streamlit run app.py
-```
-
-### Método 2: Ejecución con Parámetros Específicos
-
-```bash
-# Ejecutar en puerto específico
-streamlit run app.py --server.port 8501
-
-# Ejecutar en modo headless (sin navegador automático)
-streamlit run app.py --server.headless true
-```
-
-### Paso 3: Acceder a la Aplicación
-
-1. El navegador se abrirá automáticamente
-2. Si no se abre, ve a: `http://localhost:8501`
-3. La aplicación estará lista para usar
-
-## 🎯 Uso del Sistema
-
-### Interfaz Principal
-
-1. **Sidebar**: Controles y configuración
-2. **Área de chat**: Donde escribes tus consultas
-3. **Historial**: Conversaciones anteriores
-4. **Documentos**: Lista de archivos procesados
-
-### Realizar Consultas
-
-1. **Consulta simple**: Escribe tu pregunta en el chat
-2. **Búsqueda específica**: Usa palabras clave relevantes
-3. **Consulta compleja**: Formula preguntas detalladas
-
-### Ejemplos de Consultas
-
-```
-✅ Consultas efectivas:
-- "¿Qué documentos hablan sobre complementaria?"
-- "Busca información sobre agencias"
-- "¿Cuál es el proceso de evidencia?"
-- "Documentos relacionados con demandas"
-
-❌ Evita consultas muy genéricas:
-- "Todo"
-- "Información"
-- "Documentos"
-```
-
-### Funciones Especiales
-
-#### 🧹 Limpiar Base de Datos
-- **Cuándo usar**: Después de agregar nuevos documentos
-- **Qué hace**: Regenera embeddings y limpia cache
-- **Ubicación**: Botón en el sidebar
-
-#### 📁 Agregar Documentos
-- **Proceso**: Coloca archivos en `documents/`
-- **Formato**: PDF, DOCX, TXT
-- **Procesamiento**: Automático al cargar la app
-
-## 🔧 Mejoras Implementadas para Búsqueda Flexible
-
-### Problema Original
-El sistema no encontraba archivos cuando se buscaban variaciones de palabras. Por ejemplo, buscar "complementaria" no encontraba archivos llamados "COMPLEMENTARIA2" o documentos que contenían "Agencia complementaria".
-
-### Soluciones Implementadas
-
-#### 1. Normalización de Texto
-- **Función `normalize_text()`**: Convierte texto a minúsculas, remueve acentos y caracteres especiales
-- **Mejora la búsqueda**: Permite encontrar "complementaria" en "COMPLEMENTARIA2"
-
-#### 2. Búsqueda Mejorada (`enhanced_search()`)
-- **Búsqueda semántica**: Usa embeddings para búsqueda contextual
-- **Búsqueda de texto**: Busca coincidencias exactas en contenido normalizado
-- **Variaciones automáticas**: Genera variaciones de palabras clave automáticamente
-  - "complementaria" → ["complementaria", "complementarias", "complementario", "complementarios", "complementar", "complementacion", "complementado", "complementada"]
-  - "agencia" → ["agencia", "agencias", "agencial"]
-  - "evidencia" → ["evidencia", "evidencias", "evidenciar", "evidenciado"]
-- **Búsqueda de términos relacionados**: Encuentra "Agencia complementaria" cuando buscas "complementaria"
-- **Sistema de scoring**: Prioriza resultados basado en frecuencia y ubicación de coincidencias
-
-#### 3. Mejora en el Chunking
-- **Chunks más grandes**: 800 caracteres (antes 500) para mantener contexto
-- **Más overlap**: 200 caracteres (antes 100) para no perder palabras clave
-- **Separadores inteligentes**: Preserva mejor la estructura del texto
-
-#### 4. Metadata Enriquecida
-- **Contenido normalizado**: Se guarda en metadata para búsqueda rápida
-- **Palabras clave del archivo**: Extrae palabras clave del nombre del archivo
-- **Búsqueda en nombres**: Permite encontrar archivos por su nombre
-- **Score de coincidencia**: Calcula relevancia basada en frecuencia y ubicación
-
-#### 5. Retriever Personalizado
-- **Clase `EnhancedRetriever`**: Combina búsqueda semántica y de texto
-- **Compatibilidad con Pydantic**: Usa `Field` para definir campos correctamente
-- **Métodos actualizados**: Usa `_get_relevant_documents` y `_aget_relevant_documents`
-- **Mejor cobertura**: Busca en contenido y nombres de archivos
-- **Deduplicación**: Evita resultados duplicados
-
-#### 6. Prompt Mejorado
-- **Búsqueda exhaustiva**: Instrucciones específicas para buscar variaciones y términos relacionados
-- **Reconocimiento de contexto**: Identifica "Agencia complementaria" como relevante para búsquedas de "complementaria"
-- **Menor falsos negativos**: Solo responde "no conozco la respuesta" cuando realmente no encuentra nada
-
-### Cómo Usar las Mejoras
-
-1. **Búsqueda normal**: Escribe "complementaria" y encontrará "COMPLEMENTARIA2"
-2. **Búsqueda por archivo**: Busca "evidencia agencias" y encontrará el archivo correspondiente
-3. **Variaciones automáticas**: El sistema busca automáticamente variaciones de las palabras
-4. **Términos relacionados**: Busca "complementaria" y encuentra "Agencia complementaria"
-
-### Limpiar Base de Datos
-Si agregas nuevos documentos o quieres aplicar las mejoras a documentos existentes:
-1. Haz clic en "🧹 Limpiar base de datos" en el sidebar
-2. El sistema regenerará automáticamente los embeddings con las mejoras
-3. Se limpiará el cache y se recargará la página
-
-### Archivos Modificados
-- `app.py`: Todas las mejoras implementadas aquí
-- `chroma_db/`: Base de datos de embeddings (se regenera automáticamente)
-
-### Correcciones Técnicas
-- **Error de Pydantic**: Corregido el error "EnhancedRetriever object has no field vectorstore"
-- **Compatibilidad**: El retriever ahora funciona correctamente con LangChain y Pydantic
-- **Validación**: Campos definidos correctamente usando `Field` de Pydantic
-- **Deprecación**: Actualizados métodos a `_get_relevant_documents` y `_aget_relevant_documents`
-
-### Ejemplo de Uso
-```
-Usuario: "complementaria"
-Sistema: Encuentra "EVIDENCIA AGENCIAS COMPLEMENTARIA2.docx" y responde con su contenido
-Sistema: También encuentra documentos que contienen "Agencia complementaria"
-```
-
-## 🛠️ Solución de Problemas
-
-### Problemas Comunes
-
-#### Error: "ModuleNotFoundError"
-```bash
-# Solución: Activar entorno virtual
-.venv\Scripts\activate  # Windows
-source .venv/bin/activate  # macOS/Linux
-```
-
-#### Error: "Port already in use"
-```bash
-# Solución: Usar puerto diferente
-streamlit run app.py --server.port 8502
-```
-
-#### Error: "No documents found"
-1. Verifica que hay archivos en `documents/`
-2. Haz clic en "🧹 Limpiar base de datos"
-3. Reinicia la aplicación
-
-#### Error: "Memory issues"
-1. Cierra otras aplicaciones
-2. Reduce el tamaño de chunks en `app.py`
-3. Usa menos documentos simultáneamente
-
-### Logs y Debugging
-
-```bash
-# Ejecutar con logs detallados
-streamlit run app.py --logger.level debug
-
-# Ver logs en tiempo real
-tail -f ~/.streamlit/logs/streamlit.log
+```python
+def get_ollama_llm():
+    return Ollama(model="tu-modelo-aqui")
 ```
 
 ## 📁 Estructura del Proyecto
@@ -305,40 +138,82 @@ tail -f ~/.streamlit/logs/streamlit.log
 ```
 mi_agente_rag/
 ├── app.py                 # Aplicación principal
-├── requirements.txt       # Dependencias de Python
-├── README.md             # Este archivo
+├── requirements.txt       # Dependencias
+├── README.md             # Documentación
 ├── .gitignore           # Archivos ignorados por Git
-├── .env                 # Variables de entorno (opcional)
-├── documents/           # Documentos a procesar
-│   ├── *.pdf
-│   ├── *.docx
-│   └── *.txt
-├── assets/              # Recursos estáticos
-│   └── logo.png
-├── chroma_db/           # Base de datos de embeddings
-└── .venv/               # Entorno virtual
+├── documents/           # Directorio de documentos
+├── chroma_db/          # Base de datos vectorial
+├── assets/             # Recursos estáticos
+└── .venv/              # Entorno virtual
 ```
 
-## 🤝 Contribuir
+## 🎯 Características Técnicas
 
+### Análisis de Documentos
+- **Normalización de texto**: Mejora la precisión de búsquedas
+- **Detección de similitud**: Usa algoritmos de comparación avanzados
+- **Análisis semántico**: Identifica cambios significativos en el contenido
+- **Extracción de palabras clave**: Detecta términos importantes
+
+### Búsqueda Inteligente
+- **Embeddings**: Usa SentenceTransformers para búsqueda semántica
+- **Búsqueda híbrida**: Combina embeddings con búsqueda de texto
+- **Variaciones automáticas**: Busca términos relacionados automáticamente
+- **Ranking inteligente**: Ordena resultados por relevancia
+
+### Manejo de Errores
+- **Validaciones robustas**: Verifica archivos antes del procesamiento
+- **Manejo de excepciones**: Captura y maneja errores de forma elegante
+- **Limpieza automática**: Elimina archivos temporales y parciales
+- **Feedback detallado**: Proporciona información clara sobre errores
+
+## 🚨 Solución de Problemas
+
+### Problemas Comunes
+
+1. **Ollama no responde**
+   - Verifica que Ollama esté ejecutándose: `ollama serve`
+   - Confirma que el modelo esté instalado: `ollama list`
+
+2. **Error al subir archivos**
+   - Verifica el formato (solo PDF y DOCX)
+   - Confirma que el archivo no esté corrupto
+   - Verifica el espacio en disco
+
+3. **Búsquedas lentas**
+   - La primera búsqueda puede ser lenta (carga de embeddings)
+   - Las búsquedas posteriores son más rápidas
+
+4. **Archivos no encontrados**
+   - Verifica que los archivos estén en el directorio `documents/`
+   - Confirma que los archivos sean legibles
+
+### Logs y Debugging
+Los errores se muestran en la consola donde ejecutas Streamlit. Para más detalles, revisa:
+- Mensajes de error en la interfaz
+- Logs en la consola
+- Archivos temporales en el directorio `documents/`
+
+## 🤝 Contribuciones
+
+Las contribuciones son bienvenidas. Por favor:
 1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
+2. Crea una rama para tu feature
+3. Commit tus cambios
+4. Push a la rama
 5. Abre un Pull Request
 
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
 
-## 📞 Soporte
+## 🆘 Soporte
 
 Si tienes problemas o preguntas:
-
-1. Revisa la sección [Solución de Problemas](#solución-de-problemas)
-2. Busca en los [Issues](https://github.com/tu-usuario/mi_agente_rag/issues)
+1. Revisa la documentación
+2. Busca en los issues existentes
 3. Crea un nuevo issue con detalles del problema
 
 ---
 
-**Nota**: Las mejoras hacen que el sistema sea mucho más flexible y encuentre documentos incluso con variaciones en mayúsculas, acentos, nombres de archivos y términos relacionados. 
+**Desarrollado con ❤️ para análisis inteligente de documentos** 
