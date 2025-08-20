@@ -98,27 +98,48 @@ IA: "Según el documento 'Políticas_2024.pdf', las políticas de crédito estab
 ## 🔍 Búsqueda Semántica
 
 ### **Características**
-- **Búsqueda por Similitud**: Encuentra contenido relacionado
-- **Búsqueda por Palabras Clave**: Búsqueda tradicional
-- **Fuentes Documentadas**: Cada respuesta incluye fuentes
-- **Resultados Relevantes**: Ordenados por relevancia
+- **Búsqueda Inteligente**: Encuentra información relevante sin palabras exactas
+- **Resultados Contextuales**: Respuestas basadas en el contenido real
+- **Fuentes Citas**: Muestra de dónde viene cada respuesta
+- **Ranking Inteligente**: Los resultados más relevantes aparecen primero
 
-### **Ejemplos de Búsqueda**
+## ⚙️ Configuración Avanzada
+
+### **Exclusión de la Carpeta Documents**
+La aplicación permite excluir la carpeta `documents/` de la carga automática para mejorar el rendimiento y evitar el procesamiento de archivos no deseados.
+
+#### **Habilitar/Deshabilitar Exclusión**
+1. En la barra lateral, ve a la sección **"⚙️ Configuración"**
+2. Marca/desmarca la opción **"🚫 Excluir carpeta 'documents' de la carga"**
+3. La configuración se guarda automáticamente en `config.json`
+
+#### **Comportamiento cuando está Excluida**
+- ✅ **No se cargan** documentos automáticamente desde la carpeta
+- ✅ **No se procesan** archivos existentes en la carpeta
+- ✅ **No se agregan** nuevos archivos a la base de datos
+- ✅ **Mejor rendimiento** al iniciar la aplicación
+- ✅ **Control total** sobre qué documentos procesar
+
+#### **Comportamiento cuando NO está Excluida**
+- 📚 **Se cargan** todos los documentos de la carpeta `documents/`
+- 🔍 **Se indexan** para búsqueda semántica
+- 💾 **Se procesan** automáticamente al iniciar
+- 📁 **Se pueden subir** nuevos archivos
+
+### **Archivo de Configuración**
+La configuración se guarda en `config.json`:
+```json
+{
+    "exclude_documents_folder": true,
+    "offline_mode": true,
+    "embedding_model": "all-MiniLM-L6-v2",
+    "llm_model": "mistral",
+    "retriever_k": 4,
+    "max_file_size": 52428800
+}
 ```
-"políticas de crédito" → Encuentra documentos sobre créditos
-"fechas importantes" → Encuentra fechas y plazos
-"requisitos" → Encuentra requisitos y condiciones
-```
 
-## 💬 Sistema de Comentarios
-
-### **Funcionalidades**
-- **Agregar Comentarios**: Notas personalizadas
-- **Ver Comentarios**: Revisar notas guardadas
-- **Búsqueda en Comentarios**: Encuentra notas específicas
-- **Limpieza**: Eliminar comentarios antiguos
-
-## 🛠️ Utilidades
+## 🚀 Optimizaciones de Rendimiento
 
 ### **Gestión del Sistema**
 - **Limpiar Chat**: Borrar historial de conversaciones

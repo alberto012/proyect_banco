@@ -133,4 +133,20 @@
     .loader-subtitle {
         font-size: 14px;
     }
+}
+
+/* Estilos para estados de advertencia */
+.metric-card.warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    border: 2px solid #d97706;
+    color: white;
+}
+
+.metric-card.warning h4 {
+    color: white;
+}
+
+.metric-card.warning p {
+    color: white;
+    opacity: 0.9;
 } 

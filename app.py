@@ -37,6 +37,43 @@ from langchain_community.llms import Ollama
 # CONFIGURACIÓN GLOBAL
 # =============================================================================
 
+def load_config():
+    """Carga la configuración desde el archivo config.json"""
+    try:
+        import json
+        config_path = Path("config.json")
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                return config
+    except Exception as e:
+        print(f"Error cargando configuración: {e}")
+    
+    # Configuración por defecto si no se puede cargar el archivo
+    return {
+        "exclude_documents_folder": True,
+        "offline_mode": True,
+        "embedding_model": "all-MiniLM-L6-v2",
+        "llm_model": "mistral",
+        "retriever_k": 4,
+        "max_file_size": 50 * 1024 * 1024
+    }
+
+def save_config(config):
+    """Guarda la configuración en el archivo config.json"""
+    try:
+        import json
+        config_path = Path("config.json")
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"Error guardando configuración: {e}")
+        return False
+
+# Cargar configuración
+USER_CONFIG = load_config()
+
 # Directorios principales
 DOCUMENTS_DIR = Path("./documents")
 CHROMA_DB_DIR = Path("./chroma_db")
@@ -45,11 +82,11 @@ CHROMA_DB_DIR = Path("./chroma_db")
 APP_CONFIG = {
     "page_title": "CorrientesAI - Asistente Inteligente Offline",
     "page_icon": "🏦",
-    "max_file_size": 50 * 1024 * 1024,  # 50MB
+    "max_file_size": USER_CONFIG.get("max_file_size", 50 * 1024 * 1024),  # 50MB
     "supported_formats": ['.pdf', '.docx', '.txt'],  # Agregado .txt para más compatibilidad
-    "embedding_model": "all-MiniLM-L6-v2",  # Modelo local que se descarga una vez
-    "llm_model": "mistral",  # Modelo local de Ollama
-    "retriever_k": 4,  # Aumentado para mejor cobertura
+    "embedding_model": USER_CONFIG.get("embedding_model", "all-MiniLM-L6-v2"),  # Modelo local que se descarga una vez
+    "llm_model": USER_CONFIG.get("llm_model", "mistral"),  # Modelo local de Ollama
+    "retriever_k": USER_CONFIG.get("retriever_k", 4),  # Aumentado para mejor cobertura
     "brand_name": "CorrientesAI Offline",
     "brand_description": "Tu asistente inteligente offline para la gestión documental",
     "primary_color": "#1e3a8a",  # Azul corporativo
@@ -58,7 +95,8 @@ APP_CONFIG = {
     "success_color": "#10b981",  # Verde para éxito
     "warning_color": "#f59e0b",  # Amarillo para advertencias
     "error_color": "#ef4444",  # Rojo para errores
-    "offline_mode": True  # Modo offline activado
+    "offline_mode": USER_CONFIG.get("offline_mode", True),  # Modo offline activado
+    "exclude_documents_folder": USER_CONFIG.get("exclude_documents_folder", True)  # Excluir carpeta documents de carga automática
 }
 
 # =============================================================================
@@ -447,17 +485,30 @@ def show_status_info():
     with col2:
         # Documentos - con información real y botón
         docs = get_loaded_document_names(DOCUMENTS_DIR)
-        st.markdown("""
-        <div class="metric-card fade-in-up">
-            <h4>📚 Documentos</h4>
-            <p>""" + str(len(docs)) + """ archivos</p>
-        </div>
-        """, unsafe_allow_html=True)
         
-        # Botón para ir a documentos
-        if st.button("📋 Ver Documentos", use_container_width=True, key="metric_view_docs"):
-            st.session_state.main_tab = "Documentos"
-            st.rerun()
+        # Mostrar mensaje especial si la carpeta documents está excluida
+        if APP_CONFIG.get("exclude_documents_folder", False):
+            st.markdown("""
+            <div class="metric-card fade-in-up warning">
+                <h4>📚 Documentos</h4>
+                <p>🚫 Carpeta excluida</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="metric-card fade-in-up">
+                <h4>📚 Documentos</h4>
+                <p>""" + str(len(docs)) + """ archivos</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Botón para ir a documentos (solo si no está excluida)
+        if not APP_CONFIG.get("exclude_documents_folder", False):
+            if st.button("📋 Ver Documentos", use_container_width=True, key="metric_view_docs"):
+                st.session_state.main_tab = "Documentos"
+                st.rerun()
+        else:
+            st.info("📚 La carpeta 'documents' está excluida de la carga automática")
     
     with col3:
         # Chat - con información real y botón
@@ -497,11 +548,14 @@ def show_status_info():
     
     with col3:
         # Documentos en el directorio
-        docs = get_loaded_document_names(DOCUMENTS_DIR)
-        if docs:
-            st.info(f"📁 Directorio: {len(docs)} archivos")
+        if APP_CONFIG.get("exclude_documents_folder", False):
+            st.warning("📁 Directorio: Excluido")
         else:
-            st.info("📁 Directorio: Vacío")
+            docs = get_loaded_document_names(DOCUMENTS_DIR)
+            if docs:
+                st.info(f"📁 Directorio: {len(docs)} archivos")
+            else:
+                st.info("📁 Directorio: Vacío")
     
     with col4:
         # Estado del chat
@@ -554,6 +608,10 @@ def refresh_vectorstore_cache():
 def get_loaded_document_names(documents_dir):
     """Obtiene la lista de nombres de documentos cargados"""
     try:
+        # Si está configurado para excluir la carpeta documents, retornar lista vacía
+        if APP_CONFIG.get("exclude_documents_folder", False):
+            return []
+            
         if not documents_dir.exists():
             return []
         files = []
@@ -570,7 +628,9 @@ def initialize_vectorstore_async(documents_dir, chroma_db_dir):
         # Mostrar loader personalizado
         show_custom_loader("🏦 Inicializando base de datos offline...")
         
-        documents_dir.mkdir(exist_ok=True)
+        # Solo crear la carpeta documents si no está excluida
+        if not APP_CONFIG.get("exclude_documents_folder", False):
+            documents_dir.mkdir(exist_ok=True)
         chroma_db_dir.mkdir(exist_ok=True)
         
         # Actualizar mensaje del loader
@@ -868,6 +928,13 @@ def process_uploaded_file(uploaded_file, vectorstore):
 def save_uploaded_file(uploaded_file, vectorstore):
     """Guarda un archivo subido en el directorio de documentos"""
     try:
+        # Si está configurado para excluir la carpeta documents, no guardar archivos
+        if APP_CONFIG.get("exclude_documents_folder", False):
+            return {
+                "success": False,
+                "error": "La carpeta documents está excluida de la carga automática"
+            }
+            
         # Mostrar loader personalizado
         show_custom_loader("🏦 Guardando archivo...")
         
@@ -1211,6 +1278,37 @@ def main():
             st.session_state.show_chat_interface = False
             st.session_state.show_documents = False
             st.rerun()
+        
+        st.divider()
+        
+        # Configuración de la carpeta documents
+        st.subheader("⚙️ Configuración")
+        
+        # Checkbox para controlar la exclusión de la carpeta documents
+        exclude_docs = st.checkbox(
+            "🚫 Excluir carpeta 'documents' de la carga",
+            value=APP_CONFIG.get("exclude_documents_folder", False),
+            help="Cuando está activado, la carpeta 'documents' no se cargará automáticamente ni se procesarán archivos de ella"
+        )
+        
+        # Actualizar la configuración si cambia
+        if exclude_docs != APP_CONFIG.get("exclude_documents_folder", False):
+            APP_CONFIG["exclude_documents_folder"] = exclude_docs
+            
+            # Guardar configuración en archivo
+            current_config = {
+                "exclude_documents_folder": exclude_docs,
+                "offline_mode": APP_CONFIG.get("offline_mode", True),
+                "embedding_model": APP_CONFIG.get("embedding_model", "all-MiniLM-L6-v2"),
+                "llm_model": APP_CONFIG.get("llm_model", "mistral"),
+                "retriever_k": APP_CONFIG.get("retriever_k", 4),
+                "max_file_size": APP_CONFIG.get("max_file_size", 50 * 1024 * 1024)
+            }
+            
+            if save_config(current_config):
+                st.success("✅ Configuración guardada. Reinicia la aplicación para aplicar los cambios.")
+            else:
+                st.error("❌ Error al guardar la configuración.")
         
         # Sección de ayuda para Ollama (solo si no está disponible)
         if not st.session_state.get("ollama_available", False):

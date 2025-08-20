@@ -140,3 +140,7 @@ chroma_db/
 # OS
 .DS_Store
 Thumbs.db 
+
+# Project specific
+documents/
+config.json 
