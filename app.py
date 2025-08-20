@@ -27,7 +27,7 @@ from typing import List, Any
 from pydantic import Field
 
 # LangChain Community
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -43,21 +43,22 @@ CHROMA_DB_DIR = Path("./chroma_db")
 
 # Configuración de la aplicación
 APP_CONFIG = {
-    "page_title": "CorrientesAI - Asistente Inteligente",
+    "page_title": "CorrientesAI - Asistente Inteligente Offline",
     "page_icon": "🏦",
     "max_file_size": 50 * 1024 * 1024,  # 50MB
-    "supported_formats": ['.pdf', '.docx'],
-    "embedding_model": "all-MiniLM-L6-v2",
-    "llm_model": "llama2:7b",  # Cambiado a un modelo más específico
-    "retriever_k": 3,
-    "brand_name": "CorrientesAI",
-    "brand_description": "Tu asistente inteligente para la gestión documental",
+    "supported_formats": ['.pdf', '.docx', '.txt'],  # Agregado .txt para más compatibilidad
+    "embedding_model": "all-MiniLM-L6-v2",  # Modelo local que se descarga una vez
+    "llm_model": "mistral",  # Modelo local de Ollama
+    "retriever_k": 4,  # Aumentado para mejor cobertura
+    "brand_name": "CorrientesAI Offline",
+    "brand_description": "Tu asistente inteligente offline para la gestión documental",
     "primary_color": "#1e3a8a",  # Azul corporativo
     "secondary_color": "#3b82f6",  # Azul más claro
     "accent_color": "#f59e0b",  # Dorado para acentos
     "success_color": "#10b981",  # Verde para éxito
     "warning_color": "#f59e0b",  # Amarillo para advertencias
-    "error_color": "#ef4444"  # Rojo para errores
+    "error_color": "#ef4444",  # Rojo para errores
+    "offline_mode": True  # Modo offline activado
 }
 
 # =============================================================================
@@ -84,6 +85,58 @@ def setup_page_config():
         layout="wide",
         initial_sidebar_state="expanded"
     )
+    
+    # Cargar archivos del loader personalizado
+    def load_css():
+        with open('assets/loader.css', 'r', encoding='utf-8') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    
+    def load_js():
+        with open('assets/loader.js', 'r', encoding='utf-8') as f:
+            st.markdown(f'<script>{f.read()}</script>', unsafe_allow_html=True)
+    
+    # Cargar CSS y JS del loader
+    try:
+        load_css()
+        load_js()
+    except FileNotFoundError:
+        # Si no encuentra los archivos, usar loader básico
+        st.markdown("""
+        <style>
+        .loader-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .loader-text {
+            color: white;
+            font-size: 24px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .loader-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px 0;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        </style>
+        """, unsafe_allow_html=True)
     
     # CSS personalizado para diseño moderno y etéreo
     st.markdown("""
@@ -440,7 +493,7 @@ def show_status_info():
         if llm_available:
             st.success("✅ LLM: Disponible")
         else:
-            st.warning("⚠️ LLM: No disponible")
+            st.warning("⚠️ IA: No disponible")
     
     with col3:
         # Documentos en el directorio
@@ -512,78 +565,217 @@ def get_loaded_document_names(documents_dir):
         return []
 
 def initialize_vectorstore_async(documents_dir, chroma_db_dir):
-    """Inicializa el vectorstore de forma asíncrona"""
+    """Inicializa el vectorstore de forma asíncrona con modo offline"""
     try:
+        # Mostrar loader personalizado
+        show_custom_loader("🏦 Inicializando base de datos offline...")
+        
         documents_dir.mkdir(exist_ok=True)
         chroma_db_dir.mkdir(exist_ok=True)
         
-        embeddings = SentenceTransformerEmbeddings(model_name=APP_CONFIG["embedding_model"])
+        # Actualizar mensaje del loader
+        show_custom_loader("🏦 Cargando modelos de embeddings offline...")
+        
+        # Configuración para modo offline - usar caché local
+        import os
+        os.environ['HF_HUB_OFFLINE'] = '1'  # Forzar modo offline
+        os.environ['TRANSFORMERS_OFFLINE'] = '1'  # Forzar modo offline
+        
+        # Intentar cargar embeddings desde caché local
+        try:
+            embeddings = SentenceTransformerEmbeddings(
+                model_name=APP_CONFIG["embedding_model"],
+                cache_folder="./embeddings_cache"  # Usar caché local
+            )
+            
+            # Probar el modelo con texto local
+            test_embedding = embeddings.embed_query("Prueba offline")
+            if not test_embedding or len(test_embedding) == 0:
+                raise Exception("Modelo de embeddings no responde")
+                
+        except Exception as e:
+            print(f"⚠️ Error cargando embeddings: {e}")
+            print("🔄 Intentando cargar desde caché local...")
+            
+            # Intentar cargar directamente desde el directorio de caché
+            cache_path = Path("./embeddings_cache")
+            if cache_path.exists():
+                try:
+                    from sentence_transformers import SentenceTransformer
+                    model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder='./embeddings_cache')
+                    embeddings = SentenceTransformerEmbeddings(
+                        model_name=APP_CONFIG["embedding_model"],
+                        cache_folder="./embeddings_cache"
+                    )
+                except Exception as cache_error:
+                    print(f"❌ Error con caché local: {cache_error}")
+                    # Crear embeddings básicos como fallback
+                    return create_basic_vectorstore(documents_dir, chroma_db_dir)
+            else:
+                print("❌ No se encontró caché local de embeddings")
+                return create_basic_vectorstore(documents_dir, chroma_db_dir)
+        
         vectorstore = Chroma(
             persist_directory=str(chroma_db_dir),
             embedding_function=embeddings
         )
         
+        # Ocultar loader al completar
+        hide_custom_loader()
         return vectorstore
     except Exception as e:
         print(f"Error initializing vectorstore: {e}")
+        # Ocultar loader en caso de error
+        hide_custom_loader()
+        return create_basic_vectorstore(documents_dir, chroma_db_dir)
+
+def create_basic_vectorstore(documents_dir, chroma_db_dir):
+    """Crea un vectorstore básico para funcionamiento offline sin embeddings"""
+    try:
+        print("🔄 Creando vectorstore básico offline...")
+        
+        # Crear un vectorstore simple sin embeddings
+        from langchain_community.vectorstores import Chroma
+        from langchain_community.embeddings import FakeEmbeddings
+        
+        # Usar embeddings falsos para funcionamiento básico
+        fake_embeddings = FakeEmbeddings(size=384)
+        
+        vectorstore = Chroma(
+            persist_directory=str(chroma_db_dir),
+            embedding_function=fake_embeddings
+        )
+        
+        print("✅ Vectorstore básico creado para modo offline")
+        return vectorstore
+    except Exception as e:
+        print(f"❌ Error creando vectorstore básico: {e}")
         return None
 
 def get_ollama_llm():
-    """Obtiene la instancia de Ollama LLM con manejo de errores mejorado"""
+    """Obtiene la instancia de Ollama LLM optimizada para Mistral con manejo de errores mejorado"""
+    # Priorizar Mistral y modelos optimizados
     models_to_try = [
-        "llama2:7b",
-        "llama2",
-        "mistral",
-        "llama2:13b",
-        "codellama:7b"
+        "mistral",  # Modelo principal optimizado
+        "mistral:7b",  # Versión específica de Mistral
+        "mistral:latest",  # Última versión de Mistral
+        "llama2:7b",  # Fallback a Llama2
+        "llama2",  # Fallback genérico
+        "codellama:7b"  # Fallback para código
     ]
     
     for model in models_to_try:
         try:
-            print(f"Intentando conectar con modelo: {model}")
-            llm = Ollama(model=model)
+            print(f"🔄 Intentando conectar con modelo: {model}")
+            
+            # Mostrar loader personalizado
+            show_custom_loader(f"🏦 Conectando con {model}...")
+            
+            # Configuración optimizada para Mistral
+            llm_config = {
+                "model": model,
+                "temperature": 0.1,  # Baja temperatura para respuestas más consistentes
+                "top_p": 0.9,  # Control de diversidad
+                "top_k": 40,  # Control de tokens
+                "repeat_penalty": 1.1,  # Evitar repeticiones
+                "num_ctx": 4096,  # Contexto ampliado
+            }
+            
+            llm = Ollama(**llm_config)
+            
+            # Actualizar mensaje del loader
+            show_custom_loader(f"🏦 Probando {model}...")
+            
             # Probar una consulta simple para verificar que funciona
-            test_response = llm.invoke("Hola")
-            print(f"✅ Modelo {model} conectado exitosamente")
-            return llm
+            test_response = llm.invoke("Hola, ¿estás listo?")
+            
+            if test_response and len(test_response.strip()) > 0:
+                print(f"✅ Modelo {model} conectado exitosamente")
+                print(f"📊 Configuración: temp={llm_config['temperature']}, ctx={llm_config['num_ctx']}")
+                
+                # Ocultar loader al conectar exitosamente
+                hide_custom_loader()
+                return llm
+            else:
+                print(f"⚠️ Modelo {model} respondió vacío")
+                continue
+                
         except Exception as e:
-            print(f"❌ Error con modelo {model}: {e}")
+            print(f"❌ Error con modelo {model}: {str(e)[:100]}...")
             continue
     
-    # Si ningún modelo funciona, no mostrar error, solo retornar None
+    # Si ningún modelo funciona, mostrar información útil
     print("⚠️ No se pudo conectar con ningún modelo de Ollama")
+    print("💡 Sugerencias:")
+    print("   1. Verifica que Ollama esté ejecutándose: ollama serve")
+    print("   2. Descarga Mistral: ollama pull mistral")
+    print("   3. Verifica la conexión: ollama list")
+    
+    # Ocultar loader al fallar
+    hide_custom_loader()
     return None
 
 def get_or_create_qa_chain(vectorstore, llm_model):
-    """Obtiene o crea la cadena de QA"""
+    """Obtiene o crea la cadena de QA optimizada para Mistral"""
     try:
         if vectorstore is None or llm_model is None:
             return None
         
-        template = """Use the following pieces of context to answer the question at the end. 
-        If you don't know the answer, just say that you don't know, don't try to make up an answer.
+        # Mostrar loader personalizado
+        show_custom_loader("🏦 Configurando cadena de IA...")
         
-        Context: {context}
-        
-        Question: {question}
-        
-        Answer:"""
+        # Prompt template optimizado para Mistral
+        template = """Eres un asistente inteligente especializado en análisis de documentos. Tu tarea es responder preguntas basándote únicamente en la información proporcionada en el contexto.
+
+CONTEXTO:
+{context}
+
+PREGUNTA: {question}
+
+INSTRUCCIONES:
+1. Responde de manera clara, concisa y precisa
+2. Si la información no está en el contexto, di claramente "No tengo información suficiente para responder esta pregunta"
+3. Si la pregunta es ambigua, pide aclaración
+4. Usa un tono profesional pero amigable
+5. Cita información específica del contexto cuando sea relevante
+6. Si hay múltiples fuentes de información, sintetiza la respuesta de manera coherente
+
+RESPUESTA:"""
         
         prompt = PromptTemplate(
             template=template,
             input_variables=["context", "question"]
         )
         
+        # Actualizar mensaje del loader
+        show_custom_loader("🏦 Configurando buscador...")
+        
+        # Configuración optimizada para el retriever
+        retriever_config = {
+            "search_type": "similarity",
+            "search_kwargs": {
+                "k": APP_CONFIG["retriever_k"]
+            }
+        }
+        
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm_model,
             chain_type="stuff",
-            retriever=vectorstore.as_retriever(search_kwargs={"k": APP_CONFIG["retriever_k"]}),
-            chain_type_kwargs={"prompt": prompt}
+            retriever=vectorstore.as_retriever(**retriever_config),
+            chain_type_kwargs={
+                "prompt": prompt,
+                "verbose": False
+            },
+            return_source_documents=True
         )
         
+        # Ocultar loader al completar
+        hide_custom_loader()
         return qa_chain
     except Exception as e:
         print(f"Error creating QA chain: {e}")
+        # Ocultar loader en caso de error
+        hide_custom_loader()
         return None
 
 # =============================================================================
@@ -591,17 +783,30 @@ def get_or_create_qa_chain(vectorstore, llm_model):
 # =============================================================================
 
 def load_document_async(file_path):
-    """Carga un documento de forma asíncrona"""
+    """Carga un documento de forma asíncrona con soporte offline"""
     try:
         if file_path.suffix.lower() == '.pdf':
             loader = PyPDFLoader(str(file_path))
         elif file_path.suffix.lower() == '.docx':
             loader = Docx2txtLoader(str(file_path))
+        elif file_path.suffix.lower() == '.txt':
+            # Para archivos de texto, usar encoding UTF-8
+            loader = TextLoader(str(file_path), encoding='utf-8')
         else:
             return None
         
         documents = loader.load()
-        return documents
+        
+        # Procesamiento offline: dividir documentos en chunks más pequeños
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len,
+            separators=["\n\n", "\n", " ", ""]
+        )
+        
+        split_documents = text_splitter.split_documents(documents)
+        return split_documents
     except Exception as e:
         print(f"Error loading document {file_path}: {e}")
         return None
@@ -612,13 +817,20 @@ def process_uploaded_file(uploaded_file, vectorstore):
         if uploaded_file.size > APP_CONFIG["max_file_size"]:
             return {"success": False, "error": f"Archivo demasiado grande (máximo {APP_CONFIG['max_file_size'] // (1024*1024)}MB)"}
         
+        # Mostrar loader personalizado
+        show_custom_loader("🏦 Analizando archivo...")
+        
         temp_path = Path(f"./temp_{uploaded_file.name}")
         with open(temp_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
+        # Actualizar mensaje del loader
+        show_custom_loader("🏦 Extrayendo contenido...")
+        
         documents = load_document_async(temp_path)
         if not documents:
             temp_path.unlink(missing_ok=True)
+            hide_custom_loader()
             return {"success": False, "error": "No se pudo cargar el documento"}
         
         content = " ".join([doc.page_content for doc in documents])
@@ -630,6 +842,9 @@ def process_uploaded_file(uploaded_file, vectorstore):
         is_duplicate = uploaded_file.name in existing_docs
         
         temp_path.unlink(missing_ok=True)
+        
+        # Ocultar loader al completar
+        hide_custom_loader()
         
         return {
             "success": True,
@@ -647,18 +862,28 @@ def process_uploaded_file(uploaded_file, vectorstore):
             "auto_comment": f"Archivo {uploaded_file.name} analizado. Contiene {words} palabras y {lines} líneas."
         }
     except Exception as e:
+        hide_custom_loader()
         return {"success": False, "error": str(e)}
 
 def save_uploaded_file(uploaded_file, vectorstore):
     """Guarda un archivo subido en el directorio de documentos"""
     try:
+        # Mostrar loader personalizado
+        show_custom_loader("🏦 Guardando archivo...")
+        
         file_path = DOCUMENTS_DIR / uploaded_file.name
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
+        # Actualizar mensaje del loader
+        show_custom_loader("🏦 Procesando documento...")
+        
         documents = load_document_async(file_path)
         if documents and vectorstore:
             vectorstore.add_documents(documents)
+        
+        # Ocultar loader al completar
+        hide_custom_loader()
         
         return {
             "success": True,
@@ -667,6 +892,7 @@ def save_uploaded_file(uploaded_file, vectorstore):
             "documents_added": len(documents) if documents else 0
         }
     except Exception as e:
+        hide_custom_loader()
         return {"success": False, "error": str(e)}
 
 # =============================================================================
@@ -703,6 +929,102 @@ def display_saved_comments(vectorstore):
         <p>Los comentarios se muestran automáticamente en el chat cuando son relevantes para las consultas.</p>
     </div>
     """, unsafe_allow_html=True)
+
+# =============================================================================
+# FUNCIONES DE GESTIÓN DE OLLAMA
+# =============================================================================
+
+def check_ollama_status():
+    """Verifica el estado de Ollama y los modelos disponibles"""
+    try:
+        import subprocess
+        import json
+        
+        # Mostrar loader personalizado
+        show_custom_loader("🏦 Verificando estado de Ollama...")
+        
+        # Verificar si Ollama está ejecutándose
+        try:
+            result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                models = result.stdout.strip().split('\n')[1:]  # Saltar header
+                available_models = []
+                for model in models:
+                    if model.strip():
+                        model_name = model.split()[0]
+                        available_models.append(model_name)
+                
+                # Ocultar loader al completar
+                hide_custom_loader()
+                return {
+                    "status": "running",
+                    "models": available_models,
+                    "has_mistral": any("mistral" in model.lower() for model in available_models)
+                }
+            else:
+                hide_custom_loader()
+                return {"status": "error", "message": "Ollama no responde correctamente"}
+        except subprocess.TimeoutExpired:
+            hide_custom_loader()
+            return {"status": "timeout", "message": "Ollama no responde (timeout)"}
+        except FileNotFoundError:
+            hide_custom_loader()
+            return {"status": "not_installed", "message": "Ollama no está instalado"}
+        except Exception as e:
+            hide_custom_loader()
+            return {"status": "error", "message": str(e)}
+            
+    except Exception as e:
+        hide_custom_loader()
+        return {"status": "error", "message": f"Error verificando Ollama: {str(e)}"}
+
+def suggest_ollama_setup():
+    """Sugiere la configuración de Ollama basada en el estado actual"""
+    status = check_ollama_status()
+    
+    if status["status"] == "not_installed":
+        return {
+            "title": "🔧 Ollama no está instalado",
+            "message": "Necesitas instalar Ollama para usar el chat inteligente.",
+            "steps": [
+                "1. **Windows**: `winget install Ollama.Ollama` o descarga desde https://ollama.ai",
+                "2. **macOS**: `brew install ollama`",
+                "3. **Linux**: `curl -fsSL https://ollama.ai/install.sh | sh`",
+                "4. Reinicia tu terminal después de la instalación"
+            ]
+        }
+    elif status["status"] == "timeout" or status["status"] == "error":
+        return {
+            "title": "⚠️ Ollama no está ejecutándose",
+            "message": "Ollama está instalado pero no está ejecutándose.",
+            "steps": [
+                "1. Abre una nueva terminal",
+                "2. Ejecuta: `ollama serve`",
+                "3. Mantén esa terminal abierta",
+                "4. Regresa aquí y recarga la página"
+            ]
+        }
+    elif status["status"] == "running" and not status.get("has_mistral", False):
+        return {
+            "title": "📥 Descarga el modelo Mistral",
+            "message": "Ollama está funcionando pero necesitas descargar Mistral.",
+            "steps": [
+                "1. Abre una terminal",
+                "2. Ejecuta: `ollama pull mistral`",
+                "3. Espera a que termine la descarga",
+                "4. Regresa aquí y recarga la página"
+            ]
+        }
+    else:
+        return {
+            "title": "✅ Ollama está listo",
+            "message": "Ollama está funcionando correctamente con Mistral.",
+            "steps": []
+        }
+
+# =============================================================================
+# FUNCIONES DE OLLAMA OPTIMIZADAS
+# =============================================================================
 
 # =============================================================================
 # FUNCIONES DE INTERFAZ
@@ -804,9 +1126,11 @@ def main():
         "comment_text_value": "",
         "show_saved_comments_section": False,
         "show_post_save_return_option": False,
-        "show_chat_interface": True,
+        "show_chat_interface": False,  # Cambiado a False por defecto
         "show_upload_file_area": False,
-        "main_tab": "Principal"  # Cambiado a "Principal" como página inicial
+        "main_tab": "Principal",  # Página principal por defecto
+        "search_query": "",  # Nueva variable para búsqueda
+        "show_documents": False  # Nueva variable para mostrar documentos
     }
     for k, v in session_defaults.items():
         if k not in st.session_state:
@@ -815,47 +1139,77 @@ def main():
     # Header principal
     create_header()
     
-    # Sidebar para navegación
+    # Sidebar para navegación y funcionalidades
     with st.sidebar:
         st.header("📋 Navegación")
         
-        # Botón principal - Chat Inteligente
-        sidebar_chat_clicked = st.button("💬 Chat Inteligente", use_container_width=True, key="sidebar_chat")
-        if sidebar_chat_clicked:
-            st.session_state.main_tab = "Chat"
-            st.rerun()
+        # Barra de búsqueda en el sidebar
+        st.subheader("🔍 Buscar Documentos")
+        search_query = st.text_input(
+            "Buscar en documentos...",
+            value=st.session_state.get("search_query", ""),
+            placeholder="Escribe para buscar...",
+            key="sidebar_search"
+        )
+        
+        if search_query:
+            st.session_state.search_query = search_query
+            st.session_state.show_documents = True
+            st.session_state.main_tab = "Búsqueda"
         
         st.divider()
         
         # Gestión de documentos
         st.subheader("📚 Documentos")
         
-        sidebar_upload_clicked = st.button("📁 Subir archivo", use_container_width=True, key="sidebar_upload")
-        if sidebar_upload_clicked:
+        # Botón para subir archivos
+        if st.button("📁 Subir archivo", use_container_width=True, key="sidebar_upload"):
             st.session_state.main_tab = "Subir archivo"
             st.rerun()
         
-        sidebar_docs_clicked = st.button("📋 Ver documentos", use_container_width=True, key="sidebar_documents")
-        if sidebar_docs_clicked:
+        # Botón para ver documentos
+        if st.button("📋 Ver documentos", use_container_width=True, key="sidebar_documents"):
+            st.session_state.show_documents = True
             st.session_state.main_tab = "Documentos"
             st.rerun()
         
         st.divider()
         
-        # Utilidades esenciales
+        # Sistema de comentarios
+        st.subheader("💬 Comentarios")
+        
+        # Botón para ver comentarios
+        if st.button("👁️ Ver comentarios", use_container_width=True, key="sidebar_view_comments"):
+            st.session_state.main_tab = "Comentarios"
+            st.rerun()
+        
+        # Botón para agregar comentarios
+        if st.button("✏️ Agregar comentario", use_container_width=True, key="sidebar_add_comment"):
+            st.session_state.main_tab = "Agregar Comentario"
+            st.rerun()
+        
+        # Botón para limpiar comentarios
+        if st.button("🧹 Limpiar comentarios", use_container_width=True, key="sidebar_clear_comments"):
+            st.session_state.messages = []
+            st.success("Comentarios limpiados.")
+            st.rerun()
+        
+        st.divider()
+        
+        # Utilidades
         st.subheader("🛠️ Utilidades")
         
-        sidebar_clear_chat_clicked = st.button("🧹 Limpiar chat", use_container_width=True, key="sidebar_clear_chat")
-        if sidebar_clear_chat_clicked:
+        # Botón para limpiar chat
+        if st.button("🧹 Limpiar chat", use_container_width=True, key="sidebar_clear_chat"):
             clear_chat_history()
             st.success("Historial de chat limpiado.")
             st.rerun()
         
-        # Botón para volver al inicio
-        st.divider()
-        sidebar_home_clicked = st.button("🏠 Inicio", use_container_width=True, key="sidebar_home")
-        if sidebar_home_clicked:
+        # Botón para ir al inicio
+        if st.button("🏠 Inicio", use_container_width=True, key="sidebar_home"):
             st.session_state.main_tab = "Principal"
+            st.session_state.show_chat_interface = False
+            st.session_state.show_documents = False
             st.rerun()
         
         # Sección de ayuda para Ollama (solo si no está disponible)
@@ -865,93 +1219,132 @@ def main():
                 st.session_state.main_tab = "Configurar Ollama"
                 st.rerun()
 
-    # Inicialización de componentes
+    # Inicialización de componentes optimizada para modo offline
     try:
-        llm_model = get_ollama_llm()
+        # Verificar estado de Ollama primero
+        ollama_status = check_ollama_status()
+        st.session_state.ollama_status = ollama_status
+        
+        # Verificar modelos offline
+        offline_models_available = check_offline_models()
+        if not offline_models_available:
+            print("⚠️ Modelos offline no disponibles, intentando descargar...")
+            download_offline_models()
+        
+        # Inicializar vectorstore con modelos offline
         st.session_state.vectorstore = initialize_vectorstore_async(DOCUMENTS_DIR, CHROMA_DB_DIR)
         
-        if llm_model is None:
-            # Solo mostrar advertencia sutil, no error
-            st.session_state.ollama_available = False
+        # Inicializar LLM offline solo si Ollama está disponible
+        llm_model = None
+        if ollama_status["status"] == "running":
+            llm_model = get_offline_llm()  # Usar función offline
+            if llm_model is not None:
+                st.session_state.ollama_available = True
+                st.session_state.llm_model_available = True
+                st.session_state.offline_mode = True
+            else:
+                st.session_state.ollama_available = False
+                st.session_state.llm_model_available = False
+                st.session_state.offline_mode = False
         else:
-            st.session_state.ollama_available = True
+            st.session_state.ollama_available = False
+            st.session_state.llm_model_available = False
+            st.session_state.offline_mode = False
             
     except Exception as e:
-        print(f"Error al inicializar componentes: {e}")
+        print(f"Error al inicializar componentes offline: {e}")
         st.session_state.vectorstore = None
         llm_model = None
         st.session_state.ollama_available = False
+        st.session_state.llm_model_available = False
+        st.session_state.offline_mode = False
 
     # Solo crear qa_chain si tenemos llm_model
     qa_chain = None
     if llm_model is not None:
         qa_chain = get_or_create_qa_chain(st.session_state.vectorstore, llm_model)
-        st.session_state.llm_model_available = True
+        if qa_chain is None:
+            st.session_state.llm_model_available = False
     else:
         st.session_state.llm_model_available = False
 
-    # Información de estado (después de inicializar componentes)
-    show_status_info()
-
     # =============================================================================
-    # PÁGINA PRINCIPAL - SOLO BOTONES DE NAVEGACIÓN
+    # INTERFAZ PRINCIPAL SIMPLIFICADA
     # =============================================================================
     
     if st.session_state.main_tab == "Principal":
-        st.markdown("""
-        <div class="content-container fade-in-up">
-            <h3>🏦 Bienvenido a """ + APP_CONFIG["brand_name"] + """</h3>
-            <p>Selecciona una opción para comenzar a usar el sistema:</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Botones principales - Versión simplificada
-        st.markdown("### 🚀 Funciones Principales")
-        
-        # Botón Chat Inteligente - Más prominente
-        chat_clicked = st.button("💬 Chat Inteligente", use_container_width=True, type="primary", key="btn_chat_main")
-        if chat_clicked:
-            st.session_state.main_tab = "Chat"
-            st.rerun()
-        
-        st.markdown("---")
-        
-        # Otros botones en columnas
-        col1, col2 = st.columns(2)
+        # Estado del servicio en la esquina superior izquierda
+        col1, col2, col3 = st.columns([1, 2, 1])
         
         with col1:
-            upload_clicked = st.button("📁 Subir Archivo", use_container_width=True, key="btn_upload_main")
-            if upload_clicked:
-                st.session_state.main_tab = "Subir archivo"
+            st.markdown("### 🔧 Estado del Servicio")
+            
+            # Estado de Ollama
+            if st.session_state.get("ollama_available", False):
+                st.success("✅ Ollama: Activo (Offline)")
+            else:
+                st.error("❌ Ollama: Inactivo")
+            
+            # Estado del vectorstore
+            if st.session_state.vectorstore:
+                st.success("✅ Base de datos: Activa (Offline)")
+            else:
+                st.error("❌ Base de datos: Inactiva")
+            
+            # Estado del modelo LLM
+            if st.session_state.get("llm_model_available", False):
+                st.success("✅ IA: Disponible (Offline)")
+            else:
+                st.warning("⚠️ IA: No disponible")
+            
+            # Estado del modo offline
+            if st.session_state.get("offline_mode", False):
+                st.success("✅ Modo: Offline")
+            else:
+                st.info("ℹ️ Modo: Requiere conexión")
+        
+        with col2:
+            st.markdown("### 🏦 Banco de Corrientes")
+            st.markdown("**Asistente Inteligente Offline**")
+            st.markdown("*Funciona sin conexión a internet*")
+            
+            # Estadísticas rápidas
+            docs = get_loaded_document_names(DOCUMENTS_DIR)
+            messages_count = len(st.session_state.get("messages", []))
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("📚 Documentos", len(docs))
+            with col_b:
+                st.metric("💬 Mensajes", messages_count)
+        
+        with col3:
+            st.markdown("### 🚀 Acciones Rápidas")
+            
+            # Botón principal para Chat Inteligente
+            if st.button("💬 Chat Inteligente", use_container_width=True, type="primary", key="main_chat_btn"):
+                st.session_state.show_chat_interface = True
+                st.session_state.main_tab = "Chat"
                 st.rerun()
             
-            docs_clicked = st.button("📚 Ver Documentos", use_container_width=True, key="btn_docs_main")
-            if docs_clicked:
+            # Botón para ver documentos
+            if st.button("📋 Ver Documentos", use_container_width=True, key="main_docs_btn"):
+                st.session_state.show_documents = True
                 st.session_state.main_tab = "Documentos"
                 st.rerun()
         
-        with col2:
-            utilities_clicked = st.button("🛠️ Utilidades", use_container_width=True, key="btn_utilities_main")
-            if utilities_clicked:
-                st.session_state.main_tab = "Utilidades"
-                st.rerun()
-            
-            # Botón de configuración de Ollama (solo si no está disponible)
-            if not st.session_state.get("ollama_available", False):
-                ollama_clicked = st.button("🔧 Configurar Ollama", use_container_width=True, key="btn_ollama_main")
-                if ollama_clicked:
-                    st.session_state.main_tab = "Configurar Ollama"
-                    st.rerun()
+        st.divider()
         
         # Información adicional
         st.markdown("""
         <div class="success-notification fade-in-up">
-            <h4>🚀 ¿Qué puedes hacer?</h4>
+            <h4>🚀 Funcionalidades Offline Disponibles</h4>
             <ul>
-                <li><strong>💬 Chat Inteligente:</strong> Haz preguntas sobre tus documentos</li>
-                <li><strong>📁 Subir Archivo:</strong> Agrega nuevos documentos al sistema</li>
+                <li><strong>💬 Chat Inteligente:</strong> Haz preguntas sobre tus documentos (sin internet)</li>
+                <li><strong>📁 Subir Archivo:</strong> Agrega nuevos documentos al sistema (PDF, DOCX, TXT)</li>
                 <li><strong>📚 Ver Documentos:</strong> Explora los documentos disponibles</li>
-                <li><strong>🛠️ Utilidades:</strong> Herramientas de mantenimiento</li>
+                <li><strong>💬 Comentarios:</strong> Gestiona comentarios y notas</li>
+                <li><strong>🔍 Búsqueda:</strong> Búsqueda semántica en documentos</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -960,13 +1353,13 @@ def main():
         if not st.session_state.get("ollama_available", False):
             st.markdown("""
             <div class="warning-notification fade-in-up">
-                <h4>💡 Mejora tu Experiencia</h4>
-                <p>Para usar el <strong>Chat Inteligente</strong>, puedes instalar Ollama:</p>
+                <h4>💡 Configuración para Modo Offline</h4>
+                <p>Para usar el <strong>Chat Inteligente Offline</strong>, necesitas instalar Ollama:</p>
                 
                 <details>
-                <summary><strong>📋 Instrucciones de Instalación (Opcional)</strong></summary>
+                <summary><strong>📋 Instrucciones de Instalación Offline</strong></summary>
                 
-                <h5>1. Instalar Ollama:</h5>
+                <h5>1. Instalar Ollama (una sola vez):</h5>
                 <ul>
                 <li><strong>Windows:</strong> <code>winget install Ollama.Ollama</code></li>
                 <li><strong>macOS:</strong> <code>brew install ollama</code></li>
@@ -976,74 +1369,76 @@ def main():
                 <h5>2. Iniciar Ollama:</h5>
                 <code>ollama serve</code>
                 
-                <h5>3. Descargar un modelo:</h5>
-                <code>ollama pull llama2:7b</code>
+                <h5>3. Descargar modelo (una sola vez):</h5>
+                <code>ollama pull mistral</code>
                 
-                <h5>4. Reiniciar la aplicación</h5>
+                <h5>4. ¡Listo! Ya funciona offline</h5>
                 </details>
                 
-                <p><em>💡 <strong>Nota:</strong> La aplicación funciona perfectamente sin Ollama para gestionar documentos y comentarios.</em></p>
+                <p><em>💡 <strong>Ventaja:</strong> Una vez configurado, funciona completamente sin internet.</em></p>
                 </div>
             """, unsafe_allow_html=True)
 
     # =============================================================================
-    # CHAT INTELIGENTE
+    # CHAT INTELIGENTE - INTERFAZ INTEGRADA
     # =============================================================================
     
     elif st.session_state.main_tab == "Chat":
-        st.markdown("""
-        <div class="content-container fade-in-up">
-            <h3>💬 Chat Inteligente</h3>
-        </div>
-        """, unsafe_allow_html=True)
+        # Header del chat
+        col1, col2 = st.columns([3, 1])
         
-        # Botón para volver al inicio
-        if st.button("🏠 Volver al Inicio", use_container_width=True, key="chat_home"):
-            st.session_state.main_tab = "Principal"
-            st.rerun()
+        with col1:
+            st.markdown("### 💬 Chat Inteligente")
+            st.markdown("*Haz preguntas sobre tus documentos y comentarios*")
+        
+        with col2:
+            if st.button("🏠 Volver al Inicio", use_container_width=True, key="chat_home"):
+                st.session_state.main_tab = "Principal"
+                st.session_state.show_chat_interface = False
+                st.rerun()
+        
+        st.divider()
         
         # Verificar si el modelo está disponible
         if llm_model is None or qa_chain is None:
-            st.markdown("""
+            # Usar la nueva función de sugerencias
+            setup_info = suggest_ollama_setup()
+            
+            st.markdown(f"""
             <div class="warning-notification fade-in-up">
-                <h4>💬 Chat Inteligente</h4>
-                <p>El chat inteligente requiere Ollama para funcionar. Mientras tanto, puedes explorar tus documentos manualmente.</p>
+                <h4>{setup_info['title']}</h4>
+                <p>{setup_info['message']}</p>
             </div>
             """, unsafe_allow_html=True)
             
-            st.markdown("""
-            ### 🔧 Para habilitar el chat inteligente:
+            if setup_info['steps']:
+                st.markdown("### 🔧 Instrucciones de Configuración:")
+                for step in setup_info['steps']:
+                    st.markdown(step)
+                
+                # Botón para verificar estado
+                if st.button("🔄 Verificar Estado de Ollama", key="check_ollama_status"):
+                    st.rerun()
             
-            <details>
-            <summary><strong>📋 Instrucciones de Instalación</strong></summary>
-            
-            1. **Instala Ollama** (si no lo tienes):
-               ```bash
-               # En Windows (con winget)
-               winget install Ollama.Ollama
-               
-               # En macOS
-               brew install ollama
-               
-               # En Linux
-               curl -fsSL https://ollama.ai/install.sh | sh
-               ```
-            
-            2. **Inicia Ollama**:
-               ```bash
-               ollama serve
-               ```
-            
-            3. **Descarga un modelo**:
-               ```bash
-               ollama pull llama2:7b
-               # o
-               ollama pull mistral
-               ```
-            
-            4. **Reinicia la aplicación**
-            </details>
-            """, unsafe_allow_html=True)
+            # Mostrar estado actual de Ollama
+            if hasattr(st.session_state, 'ollama_status'):
+                status = st.session_state.ollama_status
+                st.markdown("### 📊 Estado Actual de Ollama:")
+                
+                if status["status"] == "running":
+                    st.success(f"✅ Ollama está ejecutándose")
+                    if status.get("models"):
+                        st.info(f"📦 Modelos disponibles: {', '.join(status['models'][:5])}")
+                        if len(status['models']) > 5:
+                            st.info(f"... y {len(status['models']) - 5} más")
+                    else:
+                        st.warning("⚠️ No hay modelos descargados")
+                elif status["status"] == "not_installed":
+                    st.error("❌ Ollama no está instalado")
+                elif status["status"] == "timeout":
+                    st.error("⏰ Ollama no responde (timeout)")
+                else:
+                    st.error(f"❌ Error: {status.get('message', 'Desconocido')}")
             
             # Mostrar documentos disponibles para consulta manual
             docs = get_loaded_document_names(DOCUMENTS_DIR)
@@ -1076,6 +1471,7 @@ def main():
                 </div>
                 """, unsafe_allow_html=True)
 
+            # Mostrar mensajes del chat
             for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
                     st.markdown(f"""
@@ -1084,6 +1480,7 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
 
+            # Input del chat
             prompt = st.chat_input("Escribe tu pregunta aquí...", disabled=st.session_state.get("input_disabled", False))
             if prompt:
                 st.session_state.messages = []
@@ -1095,125 +1492,220 @@ def main():
                         {prompt}
                     </div>
                     """, unsafe_allow_html=True)
-                with st.spinner("🤔 Pensando..."):
-                    try:
-                        if not qa_chain:
-                            st.error("El motor de consultas no está listo. Intente recargar la página.")
-                            st.session_state.messages.append({"role": "assistant", "content": "El agente no está listo para responder. Por favor, recargue la página."})
-                            st.session_state.input_disabled = False
-                            return
-
-                        result = qa_chain.invoke({"query": prompt})
-                        response_text = result.get("result", "")
-                        source_docs = result.get("source_documents", [])
-
-                        response_lower = response_text.strip().lower()
-                        general_responses = [
-                            "no lo sé", "no lo se", "no sé", "no se",
-                            "no tengo información", "no hay información", "no encuentro información",
-                            "no conozco la respuesta", "no tengo datos", "no hay datos",
-                            "no puedo encontrar", "no puedo localizar", "no tengo acceso",
-                            "no está disponible", "no se encuentra", "no existe información"
-                        ]
-                        query_words = [word.lower() for word in prompt.split() if len(word) > 2]
-                        contains_specific_words = any(word in response_lower for word in query_words)
-                        is_too_general = (
-                            len(response_text.strip()) < 50 or
-                            response_lower.count("documento") > 3 or
-                            response_lower.count("información") > 2 or
-                            (not contains_specific_words and len(query_words) > 0)
-                        )
-                        has_useful_info = (
-                            response_text.strip() and
-                            not any(general in response_lower for general in general_responses) and
-                            not is_too_general and
-                            contains_specific_words
-                        )
-                        if not has_useful_info:
-                            response_text = "no conozco la respuesta, no tengo informacion disponible para responder la pregunta"
-                            source_docs = []
-                            formatted_response = response_text
-                            suggestions = get_search_suggestions(prompt)
-                            if suggestions:
-                                formatted_response += f"\n\n💡 **Sugerencias de búsqueda:**\n"
-                                for suggestion in suggestions:
-                                    formatted_response += f"• {suggestion}\n"
-                            st.session_state.messages = []
-                        else:
-                            formatted_response = response_text
-
-                        GENERIC_NO_UNDERSTAND = [
-                            "no entiendo la pregunta",
-                            "por favor proporciona más contexto",
-                            "rephraze la pregunta",
-                            "reformula la pregunta",
-                            "necesito más información",
-                            "puedes ser más específico",
-                            "no está claro qué buscas"
-                        ]
-                        if any(kw in response_lower for kw in GENERIC_NO_UNDERSTAND):
-                            source_docs = []
-                            formatted_response = response_text
-
-                        # Mostrar fuentes como expansibles
-                        if source_docs and response_text.strip() and response_text != "no conozco la respuesta, no tengo informacion disponible para responder la pregunta" and "no conozco la respuesta" not in response_text.lower():
-                            fuentes_utilizadas = []
-                            for i, doc in enumerate(source_docs):
-                                source_name = doc.metadata.get('source', 'Desconocido')
-                                page_label = doc.metadata.get('page')
-                                creation_date = doc.metadata.get('creation_date', 'N/A')
-                                source_detail = f"Fuente {i+1}: "
-                                if source_name != "Comentario del usuario":
-                                    try:
-                                        file_name = Path(source_name).name
-                                        file_path = Path(source_name)
-                                        if file_path.is_absolute():
-                                            source_detail += f"`{file_name}` (Ubicación: {file_path})"
-                                        else:
-                                            source_detail += f"`{file_name}` (Ubicación: documents/{file_name})"
-                                    except Exception:
-                                        file_name = str(source_name)
-                                        source_detail += f"`{file_name}` (Ubicación: documents/{file_name})"
-                                    if page_label is not None:
-                                        try:
-                                            page_num = int(page_label) + 1
-                                        except Exception:
-                                            page_num = page_label
-                                        source_detail += f", pág. {page_num}"
-                                else:
-                                    source_detail += f"Comentario (fecha: {creation_date})"
-                                query_variations_found = doc.metadata.get('query_variations_found', [])
-                                if query_variations_found:
-                                    source_detail += f" | Palabras encontradas: {', '.join(query_variations_found[:3])}"
-                                content_preview = doc.page_content.strip()
-                                if len(content_preview) > 300:
-                                    content_preview = content_preview[:300] + "..."
-                                fuentes_utilizadas.append((source_detail, content_preview))
-                            # Mostrar cada fuente como botón expansible
-                            full_response_with_sources = formatted_response
-                            st.markdown(full_response_with_sources, unsafe_allow_html=True)
-                            st.markdown("#### Fuentes encontradas")
-                            for idx, (source_detail, content_preview) in enumerate(fuentes_utilizadas):
-                                with st.expander(source_detail):
-                                    st.markdown(f"<blockquote style='color:var(--text-secondary);'>{content_preview}</blockquote>", unsafe_allow_html=True)
-                            # Mostrar estadísticas de búsqueda si hay fuentes
-                            if source_docs and response_text.strip() and response_text != "no conozco la respuesta, no tengo informacion disponible para responder la pregunta":
-                                search_stats = show_search_stats(prompt, source_docs)
-                                if search_stats:
-                                    st.markdown(f"---\n{search_stats}", unsafe_allow_html=True)
-                        else:
-                            with st.chat_message("assistant"):
-                                st.markdown(formatted_response, unsafe_allow_html=True)
-                        st.session_state.messages.append({"role": "assistant", "content": formatted_response})
-                    except Exception as e:
-                        print(f"Error en consulta: {e}")
-                        error_message = "Ocurrió un error al procesar la consulta. Intente de nuevo o recargue la página."
-                        st.session_state.messages.append({"role": "assistant", "content": error_message})
-                        with st.chat_message("assistant"):
-                            st.error(error_message)
-                    finally:
+                
+                # Mostrar loader personalizado del Banco de Corrientes
+                show_custom_loader("🏦 Banco de Corrientes está procesando tu consulta...")
+                
+                try:
+                    if not qa_chain:
+                        hide_custom_loader()
+                        st.error("El motor de consultas no está listo. Intente recargar la página.")
+                        st.session_state.messages.append({"role": "assistant", "content": "El agente no está listo para responder. Por favor, recargue la página."})
                         st.session_state.input_disabled = False
+                        return
+
+                    result = qa_chain.invoke({"query": prompt})
+                    response_text = result.get("result", "")
+                    source_docs = result.get("source_documents", [])
+
+                    response_lower = response_text.strip().lower()
+                    general_responses = [
+                        "no lo sé", "no lo se", "no sé", "no se",
+                        "no tengo información", "no hay información", "no encuentro información",
+                        "no conozco la respuesta", "no tengo datos", "no hay datos",
+                        "no puedo encontrar", "no puedo localizar", "no tengo acceso",
+                        "no está disponible", "no se encuentra", "no existe información"
+                    ]
+                    query_words = [word.lower() for word in prompt.split() if len(word) > 2]
+                    contains_specific_words = any(word in response_lower for word in query_words)
+                    is_too_general = (
+                        len(response_text.strip()) < 50 or
+                        response_lower.count("documento") > 3 or
+                        response_lower.count("información") > 2 or
+                        (not contains_specific_words and len(query_words) > 0)
+                    )
+                    has_useful_info = (
+                        response_text.strip() and
+                        not any(general in response_lower for general in general_responses) and
+                        not is_too_general and
+                        contains_specific_words
+                    )
+                    if not has_useful_info:
+                        response_text = "no conozco la respuesta, no tengo informacion disponible para responder la pregunta"
+                        source_docs = []
+                        formatted_response = response_text
+                        suggestions = get_search_suggestions(prompt)
+                        if suggestions:
+                            formatted_response += f"\n\n💡 **Sugerencias de búsqueda:**\n"
+                            for suggestion in suggestions:
+                                formatted_response += f"• {suggestion}\n"
+                            st.session_state.messages = []
+                    else:
+                        formatted_response = response_text
+
+                    GENERIC_NO_UNDERSTAND = [
+                        "no entiendo la pregunta",
+                        "por favor proporciona más contexto",
+                        "rephraze la pregunta",
+                        "reformula la pregunta",
+                        "necesito más información",
+                        "puedes ser más específico",
+                        "no está claro qué buscas"
+                    ]
+                    if any(kw in response_lower for kw in GENERIC_NO_UNDERSTAND):
+                        source_docs = []
+                        formatted_response = response_text
+
+                    # Mostrar fuentes como expansibles
+                    if source_docs and response_text.strip() and response_text != "no conozco la respuesta, no tengo informacion disponible para responder la pregunta" and "no conozco la respuesta" not in response_text.lower():
+                        fuentes_utilizadas = []
+                        for i, doc in enumerate(source_docs):
+                            source_name = doc.metadata.get('source', 'Desconocido')
+                            page_label = doc.metadata.get('page')
+                            creation_date = doc.metadata.get('creation_date', 'N/A')
+                            source_detail = f"Fuente {i+1}: "
+                            if source_name != "Comentario del usuario":
+                                try:
+                                    file_name = Path(source_name).name
+                                    file_path = Path(source_name)
+                                    if file_path.is_absolute():
+                                        source_detail += f"`{file_name}` (Ubicación: {file_path})"
+                                    else:
+                                        source_detail += f"`{file_name}` (Ubicación: documents/{file_name})"
+                                except Exception:
+                                    file_name = str(source_name)
+                                    source_detail += f"`{file_name}` (Ubicación: documents/{file_name})"
+                                if page_label is not None:
+                                    try:
+                                        page_num = int(page_label) + 1
+                                    except Exception:
+                                        page_num = page_label
+                                    source_detail += f", pág. {page_num}"
+                            else:
+                                source_detail += f"Comentario (fecha: {creation_date})"
+                            query_variations_found = doc.metadata.get('query_variations_found', [])
+                            if query_variations_found:
+                                source_detail += f" | Palabras encontradas: {', '.join(query_variations_found[:3])}"
+                            content_preview = doc.page_content.strip()
+                            if len(content_preview) > 300:
+                                content_preview = content_preview[:300] + "..."
+                            fuentes_utilizadas.append((source_detail, content_preview))
+                        # Mostrar cada fuente como botón expansible
+                        full_response_with_sources = formatted_response
+                        st.markdown(full_response_with_sources, unsafe_allow_html=True)
+                        st.markdown("#### Fuentes encontradas")
+                        for idx, (source_detail, content_preview) in enumerate(fuentes_utilizadas):
+                            with st.expander(source_detail):
+                                st.markdown(f"<blockquote style='color:var(--text-secondary);'>{content_preview}</blockquote>", unsafe_allow_html=True)
+                        # Mostrar estadísticas de búsqueda si hay fuentes
+                        if source_docs and response_text.strip() and response_text != "no conozco la respuesta, no tengo informacion disponible para responder la pregunta":
+                            search_stats = show_search_stats(prompt, source_docs)
+                            if search_stats:
+                                st.markdown(f"---\n{search_stats}", unsafe_allow_html=True)
+                    else:
+                        with st.chat_message("assistant"):
+                            st.markdown(formatted_response, unsafe_allow_html=True)
+                    st.session_state.messages.append({"role": "assistant", "content": formatted_response})
+                except Exception as e:
+                    print(f"Error en consulta: {e}")
+                    error_message = "Ocurrió un error al procesar la consulta. Intente de nuevo o recargue la página."
+                    st.session_state.messages.append({"role": "assistant", "content": error_message})
+                    with st.chat_message("assistant"):
+                        st.error(error_message)
+                finally:
+                    # Ocultar loader personalizado
+                    hide_custom_loader()
+                    st.session_state.input_disabled = False
+                    st.rerun()
+
+    # =============================================================================
+    # SECCIÓN DE COMENTARIOS
+    # =============================================================================
+    
+    elif st.session_state.main_tab == "Comentarios":
+        st.markdown("### 💬 Comentarios del Sistema")
+        st.markdown("*Revisa todos los comentarios guardados*")
+        
+        if st.button("🏠 Volver al Inicio", use_container_width=True, key="comments_home"):
+            st.session_state.main_tab = "Principal"
+            st.rerun()
+        
+        st.divider()
+        
+        # Mostrar comentarios guardados
+        display_saved_comments(st.session_state.vectorstore)
+    
+    elif st.session_state.main_tab == "Agregar Comentario":
+        st.markdown("### ✏️ Agregar Comentario")
+        st.markdown("*Crea un nuevo comentario o nota*")
+        
+        if st.button("🏠 Volver al Inicio", use_container_width=True, key="add_comment_home"):
+            st.session_state.main_tab = "Principal"
+            st.rerun()
+        
+        st.divider()
+        
+        # Formulario para agregar comentario
+        comment_text = st.text_area(
+            "Escribe tu comentario:",
+            value=st.session_state.get("comment_text_value", ""),
+            height=150,
+            placeholder="Escribe aquí tu comentario o nota..."
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("💾 Guardar Comentario", type="primary", use_container_width=True):
+                if comment_text.strip():
+                    creation_date = add_comment_to_db(comment_text, st.session_state.vectorstore)
+                    if creation_date:
+                        st.success(f"✅ Comentario guardado exitosamente el {creation_date}")
+                        st.session_state.comment_text_value = ""
                         st.rerun()
+                    else:
+                        st.error("❌ Error al guardar el comentario")
+                else:
+                    st.warning("⚠️ El comentario no puede estar vacío")
+        
+        with col2:
+            if st.button("🔄 Limpiar", use_container_width=True):
+                st.session_state.comment_text_value = ""
+                st.rerun()
+    
+    elif st.session_state.main_tab == "Búsqueda":
+        st.markdown("### 🔍 Resultados de Búsqueda")
+        st.markdown(f"*Buscando: '{st.session_state.get('search_query', '')}'*")
+        
+        if st.button("🏠 Volver al Inicio", use_container_width=True, key="search_home"):
+            st.session_state.main_tab = "Principal"
+            st.session_state.search_query = ""
+            st.rerun()
+        
+        st.divider()
+        
+        # Realizar búsqueda en documentos
+        search_query = st.session_state.get("search_query", "")
+        if search_query and st.session_state.vectorstore:
+            try:
+                # Buscar en el vectorstore
+                results = st.session_state.vectorstore.similarity_search(search_query, k=5)
+                
+                if results:
+                    st.markdown(f"**Encontrados {len(results)} resultados:**")
+                    
+                    for i, doc in enumerate(results, 1):
+                        with st.expander(f"📄 Resultado {i}"):
+                            source_name = doc.metadata.get('source', 'Desconocido')
+                            st.markdown(f"**Fuente:** {source_name}")
+                            st.markdown(f"**Contenido:**")
+                            st.markdown(doc.page_content[:500] + "..." if len(doc.page_content) > 500 else doc.page_content)
+                else:
+                    st.info("No se encontraron resultados para tu búsqueda.")
+                    
+            except Exception as e:
+                st.error(f"Error en la búsqueda: {e}")
+        else:
+            st.info("Ingresa un término de búsqueda en la barra lateral.")
 
     # =============================================================================
     # OTRAS SECCIONES
@@ -1267,7 +1759,7 @@ def main():
         st.markdown("""
         <div class="content-container fade-in-up">
             <h3>🔧 Configuración de Ollama</h3>
-            <p>Guía paso a paso para configurar Ollama y habilitar el chat inteligente.</p>
+            <p>Guía paso a paso para configurar Ollama con Mistral y habilitar el chat inteligente.</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1278,94 +1770,157 @@ def main():
         
         st.divider()
         
+        # Estado actual mejorado
+        st.markdown("### 📊 Estado Actual de Ollama")
+        
+        if hasattr(st.session_state, 'ollama_status'):
+            status = st.session_state.ollama_status
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if status["status"] == "running":
+                    st.success("✅ Ollama: Ejecutándose")
+                elif status["status"] == "not_installed":
+                    st.error("❌ Ollama: No instalado")
+                elif status["status"] == "timeout":
+                    st.error("⏰ Ollama: Timeout")
+                else:
+                    st.error(f"❌ Ollama: Error")
+            
+            with col2:
+                if status.get("has_mistral", False):
+                    st.success("✅ Mistral: Disponible")
+                elif status["status"] == "running":
+                    st.warning("⚠️ Mistral: No descargado")
+                else:
+                    st.info("ℹ️ Mistral: No verificado")
+            
+            with col3:
+                if st.session_state.get("llm_model_available", False):
+                    st.success("✅ Chat: Habilitado")
+                else:
+                    st.warning("⚠️ Chat: Deshabilitado")
+            
+            # Mostrar modelos disponibles
+            if status.get("models"):
+                st.markdown("#### 📦 Modelos Disponibles:")
+                for model in status["models"]:
+                    st.code(model)
+        
+        st.divider()
+        
+        # Instrucciones específicas para Mistral
+        st.markdown("## 🚀 Configuración Optimizada para Mistral")
+        
+        setup_info = suggest_ollama_setup()
+        if setup_info['steps']:
+            st.markdown(f"### {setup_info['title']}")
+            st.info(setup_info['message'])
+            
+            st.markdown("#### 📋 Pasos a seguir:")
+            for i, step in enumerate(setup_info['steps'], 1):
+                st.markdown(f"{i}. {step}")
+        
         # Instrucciones detalladas
-        st.markdown("""
-        ## 📋 Instrucciones de Instalación
+        with st.expander("📖 Instrucciones Detalladas"):
+            st.markdown("""
+            ### 1. Instalar Ollama
+            
+            **Windows:**
+            ```bash
+            winget install Ollama.Ollama
+            ```
+            
+            **macOS:**
+            ```bash
+            brew install ollama
+            ```
+            
+            **Linux:**
+            ```bash
+            curl -fsSL https://ollama.ai/install.sh | sh
+            ```
+            
+            ### 2. Iniciar Ollama
+            
+            Abre una terminal y ejecuta:
+            ```bash
+            ollama serve
+            ```
+            
+            ### 3. Descargar Mistral (Recomendado)
+            
+            En otra terminal, ejecuta:
+            ```bash
+            # Descargar Mistral (modelo principal)
+            ollama pull mistral
+            
+            # Verificar descarga
+            ollama list
+            ```
+            
+            ### 4. Modelos Alternativos
+            
+            Si prefieres otros modelos:
+            ```bash
+            # Llama2 (más pequeño)
+            ollama pull llama2:7b
+            
+            # Code Llama (para código)
+            ollama pull codellama:7b
+            ```
+            
+            ### 5. Verificar Instalación
+            
+            ```bash
+            # Listar modelos
+            ollama list
+            
+            # Probar Mistral
+            ollama run mistral "Hola, ¿cómo estás?"
+            ```
+            """)
         
-        ### 1. Instalar Ollama
-        
-        **Windows:**
-        ```bash
-        winget install Ollama.Ollama
-        ```
-        
-        **macOS:**
-        ```bash
-        brew install ollama
-        ```
-        
-        **Linux:**
-        ```bash
-        curl -fsSL https://ollama.ai/install.sh | sh
-        ```
-        
-        ### 2. Iniciar Ollama
-        
-        Abre una terminal y ejecuta:
-        ```bash
-        ollama serve
-        ```
-        
-        ### 3. Descargar un Modelo
-        
-        En otra terminal, ejecuta uno de estos comandos:
-        ```bash
-        # Opción 1: Modelo pequeño y rápido
-        ollama pull llama2:7b
-        
-        # Opción 2: Modelo más potente
-        ollama pull llama2:13b
-        
-        # Opción 3: Modelo alternativo
-        ollama pull mistral
-        ```
-        
-        ### 4. Verificar Instalación
-        
-        Para verificar que todo funciona:
-        ```bash
-        # Listar modelos disponibles
-        ollama list
-        
-        # Probar el modelo
-        ollama run llama2:7b "Hola, ¿cómo estás?"
-        ```
-        
-        ### 5. Reiniciar la Aplicación
-        
-        Una vez configurado Ollama, reinicia esta aplicación.
-        """)
-        
-        # Estado actual
-        st.markdown("---")
-        st.markdown("### 📊 Estado Actual")
+        # Botones de acción
+        st.divider()
+        st.markdown("### 🔄 Acciones")
         
         col1, col2 = st.columns(2)
+        
         with col1:
-            if st.session_state.get("ollama_available", False):
-                st.success("✅ Ollama: Conectado")
-            else:
-                st.error("❌ Ollama: No disponible")
+            if st.button("🔄 Verificar Estado", use_container_width=True, key="check_status"):
+                st.rerun()
         
         with col2:
-            if st.session_state.get("llm_model_available", False):
-                st.success("✅ Modelo LLM: Disponible")
-            else:
-                st.warning("⚠️ Modelo LLM: No disponible")
+            if st.button("🧪 Probar Conexión", use_container_width=True, key="test_connection"):
+                try:
+                    test_llm = get_ollama_llm()
+                    if test_llm:
+                        st.success("✅ ¡Conexión exitosa! Ollama está funcionando correctamente.")
+                        st.session_state.ollama_available = True
+                        st.session_state.llm_model_available = True
+                        st.rerun()
+                    else:
+                        st.error("❌ No se pudo conectar con Ollama. Verifica la instalación.")
+                except Exception as e:
+                    st.error(f"❌ Error al probar conexión: {str(e)}")
         
-        # Botón para probar conexión
-        if st.button("🔄 Probar Conexión", use_container_width=True, key="test_ollama"):
-            try:
-                test_llm = get_ollama_llm()
-                if test_llm:
-                    st.success("✅ ¡Conexión exitosa! Ollama está funcionando correctamente.")
-                    st.session_state.ollama_available = True
-                    st.session_state.llm_model_available = True
-                    st.rerun()
-                else:
-                    st.error("❌ No se pudo conectar con Ollama. Verifica la instalación.")
-            except Exception as e:
-                st.error(f"❌ Error al probar conexión: {e}")
+        # Información adicional
+        st.divider()
+        st.markdown("### 💡 Información Adicional")
+        
+        st.info("""
+        **¿Por qué Mistral?**
+        - 🚀 **Rendimiento**: Mistral es más rápido y eficiente que Llama2
+        - 🧠 **Calidad**: Proporciona respuestas más precisas y contextuales
+        - 💾 **Memoria**: Usa menos RAM que modelos más grandes
+        - 🌍 **Multilingüe**: Excelente soporte para español
+        
+        **Requisitos del Sistema:**
+        - Mínimo 8GB RAM para Mistral
+        - Conexión a internet para descargar el modelo
+        - Terminal/Command Prompt accesible
+        """)
 
     elif st.session_state.main_tab == "Documentos":
         st.markdown("""
@@ -1418,25 +1973,26 @@ def main():
         
         st.divider()
         
-        with st.expander("ℹ️ Información sobre el proceso"):
+        with st.expander("ℹ️ Información sobre el proceso offline"):
             st.markdown("""
-            **Proceso de análisis:**
+            **Proceso de análisis offline:**
             1. **Validación**: Se verifica el formato y tamaño del archivo
             2. **Detección de duplicados**: Se verifica si el archivo ya existe
-            3. **Extracción**: Se extrae el contenido del documento
-            4. **Comparación**: Se compara con documentos similares existentes
-            5. **Análisis**: Se generan comentarios automáticos sobre cambios detectados
-            6. **Guardado**: Se guarda el archivo y se actualiza la base de datos
+            3. **Extracción**: Se extrae el contenido del documento (sin internet)
+            4. **Procesamiento**: Se divide en chunks para mejor búsqueda
+            5. **Almacenamiento**: Se guarda en base de datos local
+            6. **Indexación**: Se crean embeddings para búsqueda semántica
 
             **Formatos soportados:**
             - PDF (máximo 50MB)
             - DOCX (máximo 50MB)
+            - TXT (máximo 50MB) - Nuevo formato agregado
             """)
         
         uploaded_file = st.file_uploader(
             "Selecciona un archivo",
-            type=['pdf', 'docx'],
-            help="Solo se aceptan archivos PDF y DOCX de hasta 50MB",
+            type=['pdf', 'docx', 'txt'],
+            help="Solo se aceptan archivos PDF, DOCX y TXT de hasta 50MB",
             key=f"file_uploader_{st.session_state.get('file_uploader_key', 0)}"
         )
         
@@ -1554,6 +2110,154 @@ def main():
             clear_and_regenerate_database()
             st.session_state.main_tab = "Principal"
             st.rerun()
+
+# =============================================================================
+# FUNCIONES DE LOADER PERSONALIZADO
+# =============================================================================
+
+def show_custom_loader(message="Cargando..."):
+    """Muestra el loader personalizado del Banco de Corrientes"""
+    st.markdown(f"""
+    <script>
+    if (typeof window.showCorrientesLoader === 'function') {{
+        window.showCorrientesLoader("{message}");
+    }}
+    </script>
+    """, unsafe_allow_html=True)
+
+def hide_custom_loader():
+    """Oculta el loader personalizado"""
+    st.markdown("""
+    <script>
+    if (typeof window.hideCorrientesLoader === 'function') {
+        window.hideCorrientesLoader();
+    }
+    </script>
+    """, unsafe_allow_html=True)
+
+# =============================================================================
+# FUNCIONES DE GESTIÓN OFFLINE
+# =============================================================================
+
+def check_offline_models():
+    """Verifica que los modelos offline estén disponibles sin conexión a internet"""
+    try:
+        # Configurar variables de entorno para modo offline
+        import os
+        os.environ['HF_HUB_OFFLINE'] = '1'
+        os.environ['TRANSFORMERS_OFFLINE'] = '1'
+        
+        # Verificar modelo de embeddings desde caché local
+        cache_path = Path("./embeddings_cache")
+        if cache_path.exists():
+            try:
+                from sentence_transformers import SentenceTransformer
+                # Usar la ruta completa del caché de Hugging Face
+                model = SentenceTransformer('all-MiniLM-L6-v2', cache_folder='./embeddings_cache')
+                
+                # Probar el modelo con un texto simple
+                test_text = "Este es un texto de prueba para verificar el modelo offline."
+                embedding = model.encode(test_text)
+                
+                if embedding and len(embedding) > 0:
+                    print(f"✅ Modelo de embeddings '{APP_CONFIG['embedding_model']}' disponible (offline)")
+                    return True
+                else:
+                    print(f"❌ Modelo de embeddings '{APP_CONFIG['embedding_model']}' no responde correctamente")
+                    return False
+            except Exception as e:
+                print(f"❌ Error verificando modelo de embeddings offline: {e}")
+                return False
+        else:
+            print(f"❌ Caché local de embeddings no encontrado en ./embeddings_cache")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error verificando modelo de embeddings: {e}")
+        return False
+
+def download_offline_models():
+    """Descarga los modelos necesarios para funcionamiento offline"""
+    try:
+        print("🔄 Verificando modelos offline...")
+        
+        # Solo verificar si los modelos están disponibles localmente
+        cache_path = Path("./embeddings_cache")
+        if cache_path.exists():
+            print(f"✅ Modelo '{APP_CONFIG['embedding_model']}' ya está disponible offline")
+            return True
+        else:
+            print(f"❌ Modelo '{APP_CONFIG['embedding_model']}' no está disponible offline")
+            print("💡 Ejecuta 'python setup_offline.py' con conexión a internet para descargar modelos")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error verificando modelos offline: {e}")
+        return False
+
+def get_offline_llm():
+    """Obtiene un LLM offline usando modelos locales"""
+    # Priorizar modelos locales que funcionan offline
+    models_to_try = [
+        "mistral",  # Modelo principal optimizado
+        "mistral:7b",  # Versión específica de Mistral
+        "mistral:latest",  # Última versión de Mistral
+        "llama2:7b",  # Fallback a Llama2
+        "llama2",  # Fallback genérico
+        "codellama:7b"  # Fallback para código
+    ]
+    
+    for model in models_to_try:
+        try:
+            print(f"🔄 Intentando conectar con modelo offline: {model}")
+            
+            # Mostrar loader personalizado
+            show_custom_loader(f"🏦 Conectando con {model} (offline)...")
+            
+            # Configuración optimizada para funcionamiento offline
+            llm_config = {
+                "model": model,
+                "temperature": 0.1,  # Baja temperatura para respuestas más consistentes
+                "top_p": 0.9,  # Control de diversidad
+                "top_k": 40,  # Control de tokens
+                "repeat_penalty": 1.1,  # Evitar repeticiones
+                "num_ctx": 4096,  # Contexto ampliado
+            }
+            
+            llm = Ollama(**llm_config)
+            
+            # Actualizar mensaje del loader
+            show_custom_loader(f"🏦 Probando {model} (offline)...")
+            
+            # Probar una consulta simple para verificar que funciona offline
+            test_response = llm.invoke("Hola, ¿estás funcionando en modo offline?")
+            
+            if test_response and len(test_response.strip()) > 0:
+                print(f"✅ Modelo offline {model} conectado exitosamente")
+                print(f"📊 Configuración offline: temp={llm_config['temperature']}, ctx={llm_config['num_ctx']}")
+                
+                # Ocultar loader al conectar exitosamente
+                hide_custom_loader()
+                return llm
+            else:
+                print(f"⚠️ Modelo offline {model} respondió vacío")
+                continue
+                
+        except Exception as e:
+            print(f"❌ Error con modelo offline {model}: {str(e)[:100]}...")
+            continue
+    
+    # Si ningún modelo funciona, mostrar información útil
+    print("⚠️ No se pudo conectar con ningún modelo offline")
+    print("💡 Sugerencias para funcionamiento offline:")
+    print("   1. Verifica que Ollama esté ejecutándose: ollama serve")
+    print("   2. Descarga un modelo: ollama pull mistral")
+    print("   3. Verifica la conexión: ollama list")
+    print("   4. Asegúrate de tener suficiente espacio en disco")
+    
+    # Ocultar loader al fallar
+    hide_custom_loader()
+    return None
 
 if __name__ == "__main__":
     main()

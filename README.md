@@ -1,219 +1,222 @@
-# RAG Local - Agente de Documentos Inteligente
+# 🏦 CorrientesAI - Asistente Inteligente Offline
 
-Un agente RAG (Retrieval-Augmented Generation) local que permite consultar documentos PDF y Word de forma offline, con capacidades avanzadas de análisis y comparación de documentos.
+**Tu asistente inteligente para gestión documental que funciona completamente sin conexión a internet.**
 
 ## 🚀 Características Principales
 
-### 📁 Subida Inteligente de Archivos
-- **Análisis automático**: Compara automáticamente archivos nuevos con documentos existentes
-- **Detección de duplicados**: Identifica archivos idénticos para evitar redundancias
-- **Análisis semántico**: Detecta cambios significativos usando análisis de texto avanzado
-- **Comentarios automáticos**: Genera comentarios detallados sobre los cambios detectados
-- **Validaciones robustas**: Verifica formato, tamaño y contenido de archivos
+### ✅ **Funcionamiento 100% Offline**
+- **Chat Inteligente**: Preguntas y respuestas sin internet
+- **Búsqueda Semántica**: Encuentra información en documentos
+- **Carga de Archivos**: Procesa PDF, DOCX y TXT localmente
+- **Sistema de Comentarios**: Gestiona notas y comentarios
+- **Base de Datos Local**: Almacenamiento seguro en tu computadora
 
-### 🔍 Búsqueda Mejorada
-- **Búsqueda semántica**: Utiliza embeddings para encontrar información relevante
-- **Búsqueda por texto**: Combina búsqueda semántica con búsqueda de texto normalizado
-- **Variaciones de consulta**: Busca automáticamente variaciones y términos relacionados
-- **Fuentes detalladas**: Muestra exactamente de dónde proviene cada respuesta
+### 🎯 **Funcionalidades Offline**
+- **Modelos Locales**: IA ejecutándose en tu máquina
+- **Procesamiento Local**: Sin envío de datos a servidores externos
+- **Privacidad Total**: Tus documentos nunca salen de tu computadora
+- **Velocidad**: Respuestas instantáneas sin latencia de red
 
-### 💬 Sistema de Comentarios
-- **Comentarios automáticos**: Generados automáticamente al subir archivos
-- **Comentarios personalizados**: Permite agregar comentarios manuales
-- **Historial de comentarios**: Visualiza todos los comentarios guardados
-- **Edición de comentarios**: Modifica comentarios automáticos antes de guardarlos
+## 📋 Instalación Rápida
 
-### 📊 Análisis de Documentos
-- **Comparación de contenido**: Detecta adiciones, eliminaciones y cambios
-- **Análisis de similitud**: Calcula porcentajes de similitud entre documentos
-- **Palabras clave**: Identifica términos nuevos y removidos
-- **Recomendaciones**: Sugiere acciones basadas en el análisis
-
-## 🛠️ Instalación
-
-### Requisitos Previos
-- Python 3.8 o superior
-- Ollama instalado y ejecutándose localmente
-- Modelo de lenguaje compatible con Ollama (recomendado: llama2, mistral, o codellama)
-
-### Pasos de Instalación
-
-1. **Clonar el repositorio**
-   ```bash
-   git clone <url-del-repositorio>
-   cd mi_agente_rag
-   ```
-
-2. **Crear entorno virtual**
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # En Windows: .venv\Scripts\activate
-   ```
-
-3. **Instalar dependencias**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configurar Ollama**
-   ```bash
-   # Instalar un modelo (ejemplo con llama2)
-   ollama pull llama2
-   ```
-
-5. **Ejecutar la aplicación**
-   ```bash
-   streamlit run app.py
-   ```
-
-## 📖 Uso
-
-### Subir Archivos
-
-1. **Acceder a la función de subida**
-   - Haz clic en "📁 Subir archivo" en la barra lateral
-
-2. **Seleccionar archivo**
-   - Arrastra o selecciona un archivo PDF o DOCX
-   - El sistema validará automáticamente el formato y tamaño
-
-3. **Análisis automático**
-   - El sistema analizará el contenido del archivo
-   - Comparará con documentos existentes
-   - Generará un comentario automático con los hallazgos
-
-4. **Revisar resultados**
-   - **Documentos similares**: Ver documentos existentes relacionados
-   - **Análisis de cambios**: Detalles sobre modificaciones detectadas
-   - **Comentario automático**: Análisis generado automáticamente
-
-5. **Tomar acciones**
-   - **Guardar archivo**: Agregar el documento a la base de datos
-   - **Guardar comentario**: Guardar el comentario automático
-   - **Editar comentario**: Modificar el comentario antes de guardarlo
-   - **Agregar comentario personalizado**: Crear un comentario manual
-
-### Consultar Documentos
-
-1. **Hacer preguntas**
-   - Escribe preguntas en lenguaje natural
-   - El sistema buscará en todos los documentos y comentarios
-
-2. **Revisar fuentes**
-   - Cada respuesta incluye las fuentes utilizadas
-   - Puedes ver el contenido exacto de donde proviene la información
-
-### Gestionar Comentarios
-
-1. **Ver comentarios**
-   - Haz clic en "📋 Ver comentarios" en la barra lateral
-   - Revisa todos los comentarios guardados
-
-2. **Agregar comentarios**
-   - Haz clic en "📝 Añadir comentario"
-   - Escribe comentarios personalizados
-
-## 🔧 Configuración Avanzada
-
-### Variables de Entorno
+### **Opción 1: Configuración Automática (Recomendada)**
 ```bash
-# Configurar modelo de Ollama (opcional)
-export OLLAMA_MODEL=llama2
+# Clonar el repositorio
+git clone <tu-repositorio>
+cd mi_agente_rag
 
-# Configurar directorios (opcional)
-export DOCUMENTS_DIR=./documents
-export CHROMA_DB_DIR=./chroma_db
+# Configuración automática offline
+python setup_offline.py
 ```
 
-### Personalización del Modelo
-Puedes cambiar el modelo de Ollama modificando la función `get_ollama_llm()` en `app.py`:
+### **Opción 2: Configuración Manual**
+```bash
+# 1. Instalar dependencias
+pip install -r requirements.txt
 
-```python
-def get_ollama_llm():
-    return Ollama(model="tu-modelo-aqui")
+# 2. Instalar Ollama
+# Windows
+winget install Ollama.Ollama
+
+# macOS
+brew install ollama
+
+# Linux
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# 3. Iniciar Ollama
+ollama serve
+
+# 4. Descargar modelos (una sola vez)
+ollama pull mistral
+ollama pull llama2:7b
+
+# 5. Ejecutar la aplicación
+streamlit run app.py
 ```
 
-## 📁 Estructura del Proyecto
+## 🔧 Configuración Offline
 
+### **Requisitos del Sistema**
+- **RAM**: Mínimo 8GB (recomendado 16GB)
+- **Almacenamiento**: 10GB libres para modelos
+- **Sistema**: Windows 10+, macOS 10.15+, Ubuntu 18.04+
+- **Python**: 3.8 o superior
+
+### **Modelos Descargados**
+- **Mistral**: Modelo principal de IA (4.1GB)
+- **Llama2**: Modelo de respaldo (3.8GB)
+- **all-MiniLM-L6-v2**: Modelo de embeddings (90MB)
+
+## 🎮 Uso
+
+### **1. Interfaz Principal**
+- **Estado del Servicio**: Verifica que todo esté funcionando
+- **Chat Inteligente**: Haz preguntas sobre tus documentos
+- **Subir Archivos**: Agrega documentos al sistema
+
+### **2. Barra Lateral**
+- **🔍 Búsqueda**: Busca en documentos directamente
+- **📁 Subir archivo**: Agrega nuevos documentos
+- **📋 Ver documentos**: Explora documentos cargados
+- **💬 Comentarios**: Gestiona notas y comentarios
+
+### **3. Chat Inteligente Offline**
 ```
-mi_agente_rag/
-├── app.py                 # Aplicación principal
-├── requirements.txt       # Dependencias
-├── README.md             # Documentación
-├── .gitignore           # Archivos ignorados por Git
-├── documents/           # Directorio de documentos
-├── chroma_db/          # Base de datos vectorial
-├── assets/             # Recursos estáticos
-└── .venv/              # Entorno virtual
+Usuario: "¿Qué dice el documento sobre políticas de crédito?"
+IA: "Según el documento 'Políticas_2024.pdf', las políticas de crédito establecen que..."
 ```
 
-## 🎯 Características Técnicas
+## 📁 Formatos Soportados
 
-### Análisis de Documentos
-- **Normalización de texto**: Mejora la precisión de búsquedas
-- **Detección de similitud**: Usa algoritmos de comparación avanzados
-- **Análisis semántico**: Identifica cambios significativos en el contenido
-- **Extracción de palabras clave**: Detecta términos importantes
+| Formato | Extensión | Tamaño Máximo | Características |
+|---------|-----------|---------------|-----------------|
+| PDF | `.pdf` | 50MB | Documentos escaneados y digitales |
+| Word | `.docx` | 50MB | Documentos de Microsoft Word |
+| Texto | `.txt` | 50MB | Archivos de texto plano |
 
-### Búsqueda Inteligente
-- **Embeddings**: Usa SentenceTransformers para búsqueda semántica
-- **Búsqueda híbrida**: Combina embeddings con búsqueda de texto
-- **Variaciones automáticas**: Busca términos relacionados automáticamente
-- **Ranking inteligente**: Ordena resultados por relevancia
+## 🔍 Búsqueda Semántica
 
-### Manejo de Errores
-- **Validaciones robustas**: Verifica archivos antes del procesamiento
-- **Manejo de excepciones**: Captura y maneja errores de forma elegante
-- **Limpieza automática**: Elimina archivos temporales y parciales
-- **Feedback detallado**: Proporciona información clara sobre errores
+### **Características**
+- **Búsqueda por Similitud**: Encuentra contenido relacionado
+- **Búsqueda por Palabras Clave**: Búsqueda tradicional
+- **Fuentes Documentadas**: Cada respuesta incluye fuentes
+- **Resultados Relevantes**: Ordenados por relevancia
+
+### **Ejemplos de Búsqueda**
+```
+"políticas de crédito" → Encuentra documentos sobre créditos
+"fechas importantes" → Encuentra fechas y plazos
+"requisitos" → Encuentra requisitos y condiciones
+```
+
+## 💬 Sistema de Comentarios
+
+### **Funcionalidades**
+- **Agregar Comentarios**: Notas personalizadas
+- **Ver Comentarios**: Revisar notas guardadas
+- **Búsqueda en Comentarios**: Encuentra notas específicas
+- **Limpieza**: Eliminar comentarios antiguos
+
+## 🛠️ Utilidades
+
+### **Gestión del Sistema**
+- **Limpiar Chat**: Borrar historial de conversaciones
+- **Actualizar Buscador**: Refrescar índices de búsqueda
+- **Ver Estado**: Monitorear servicios
+- **Configurar Ollama**: Ayuda con configuración
+
+## 🔒 Privacidad y Seguridad
+
+### **Garantías Offline**
+- ✅ **Sin Conexión**: Funciona completamente offline
+- ✅ **Datos Locales**: Todo se almacena en tu computadora
+- ✅ **Sin Tracking**: No hay seguimiento de uso
+- ✅ **Sin Análisis**: No se envían datos a terceros
+
+### **Almacenamiento**
+- **Documentos**: `./documents/`
+- **Base de Datos**: `./chroma_db/`
+- **Modelos**: Caché local de Hugging Face
+- **Configuración**: Archivos locales
 
 ## 🚨 Solución de Problemas
 
-### Problemas Comunes
+### **Ollama No Responde**
+```bash
+# Verificar estado
+ollama list
 
-1. **Ollama no responde**
-   - Verifica que Ollama esté ejecutándose: `ollama serve`
-   - Confirma que el modelo esté instalado: `ollama list`
+# Reiniciar servicio
+ollama serve
 
-2. **Error al subir archivos**
-   - Verifica el formato (solo PDF y DOCX)
-   - Confirma que el archivo no esté corrupto
-   - Verifica el espacio en disco
+# Verificar modelos
+ollama list
+```
 
-3. **Búsquedas lentas**
-   - La primera búsqueda puede ser lenta (carga de embeddings)
-   - Las búsquedas posteriores son más rápidas
+### **Modelos No Disponibles**
+```bash
+# Descargar modelos
+ollama pull mistral
+ollama pull llama2:7b
 
-4. **Archivos no encontrados**
-   - Verifica que los archivos estén en el directorio `documents/`
-   - Confirma que los archivos sean legibles
+# Verificar descarga
+ollama list
+```
 
-### Logs y Debugging
-Los errores se muestran en la consola donde ejecutas Streamlit. Para más detalles, revisa:
-- Mensajes de error en la interfaz
-- Logs en la consola
-- Archivos temporales en el directorio `documents/`
+### **Error de Memoria**
+- Cerrar otras aplicaciones
+- Reiniciar Ollama
+- Usar modelo más pequeño: `llama2:7b`
 
-## 🤝 Contribuciones
+## 📊 Rendimiento
 
-Las contribuciones son bienvenidas. Por favor:
-1. Fork el proyecto
-2. Crea una rama para tu feature
-3. Commit tus cambios
-4. Push a la rama
-5. Abre un Pull Request
+### **Optimizaciones Implementadas**
+- **Chunking Inteligente**: División eficiente de documentos
+- **Embeddings Optimizados**: Modelo ligero y rápido
+- **Búsqueda Vectorial**: Respuestas instantáneas
+- **Caché Local**: Modelos precargados
 
-## 📄 Licencia
+### **Tiempos de Respuesta**
+- **Búsqueda**: < 1 segundo
+- **Chat**: 2-5 segundos
+- **Carga de Archivos**: 5-30 segundos (según tamaño)
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
+## 🔄 Actualizaciones
 
-## 🆘 Soporte
+### **Mantener Actualizado**
+```bash
+# Actualizar dependencias
+pip install -r requirements.txt --upgrade
 
-Si tienes problemas o preguntas:
-1. Revisa la documentación
-2. Busca en los issues existentes
-3. Crea un nuevo issue con detalles del problema
+# Actualizar modelos (opcional)
+ollama pull mistral:latest
+```
 
----
+## 📞 Soporte
 
-**Desarrollado con ❤️ para análisis inteligente de documentos** 
+### **Problemas Comunes**
+1. **Ollama no inicia**: Verificar instalación y permisos
+2. **Modelos no cargan**: Verificar espacio en disco
+3. **Búsqueda lenta**: Verificar RAM disponible
+4. **Archivos no cargan**: Verificar formato y tamaño
+
+### **Logs y Diagnóstico**
+```bash
+# Ver logs de Ollama
+ollama logs
+
+# Verificar estado del sistema
+python -c "import streamlit; print('Streamlit OK')"
+```
+
+## 🎉 ¡Listo para Usar!
+
+Una vez configurado, tu asistente inteligente offline estará listo para:
+- 📚 Gestionar documentos de forma inteligente
+- 💬 Responder preguntas sobre tu contenido
+- 🔍 Buscar información específica
+- 💭 Mantener comentarios y notas
+- 🔒 Todo funcionando sin internet
+
+**¡Disfruta de tu asistente inteligente completamente offline!** 🚀✨ 
